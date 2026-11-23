@@ -81,6 +81,10 @@ input:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0
 #outbtn{min-height:40px;padding:6px 14px}
 #stage{position:absolute;inset:0;overflow:hidden;touch-action:none}
 #cv,#cv2{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#cv{transform-origin:0 0;will-change:transform}
+#upd{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:9999;background:#1f7a4d;color:#fff;border-radius:22px;padding:10px 16px;font-size:15px;box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;gap:10px;align-items:center}
+#upd button{background:#fff;color:#1f7a4d;border:0;border-radius:16px;padding:6px 14px;font-weight:bold;font-size:15px}
+#upd .no{background:transparent;color:#fff;padding:6px 6px}
 
 /* 道具のバー(グッドノートのように上に並ぶ) */
 #wtop{flex-direction:column;align-items:stretch;gap:6px}
@@ -4222,13 +4226,20 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     hiTimer = setTimeout(function () {
       if (!P) return;
       var bt = baseTile(P.fi);
-      if (V.s * dpr <= bt.m.s * 1.15) { P.hi = null; return; }
+      if (V.s * dpr <= bt.m.s * 1.15) { if (P.hi) { P.hi = null; draw(); } return; }
       var r = { x0: wx(0), x1: wx(CW), y0: wy(CH), y1: wy(0) };
-      var pad = Math.max(r.x1 - r.x0, r.y1 - r.y0) * 0.015;
-      r = { x0: r.x0 + pad, x1: r.x1 - pad, y0: r.y0 + pad, y1: r.y1 - pad };
-      P.hi = renderTile(r, CW * dpr, CH * dpr);
+      // 今の画面がまだ細かい絵の中に入っていれば描き直さない(少しずらしただけで止まらない)
+      var h0 = P.hi;
+      if (h0 && h0.cov && Math.abs(h0.vs - V.s) / V.s < 0.02 && r.x0 >= h0.cov.x0 && r.x1 <= h0.cov.x1 && r.y0 >= h0.cov.y0 && r.y1 <= h0.cov.y1) return;
+      // 画面より少し広めに描いておく(大きすぎるとiPadが描けないので上限あり)
+      var mg = 0.2, px = CW * dpr * (1 + mg * 2) * CH * dpr * (1 + mg * 2);
+      if (px > 14e6) mg = Math.max(0, (Math.sqrt(14e6 / (CW * dpr * CH * dpr)) - 1) / 2);
+      var mw = (r.x1 - r.x0) * mg, mh = (r.y1 - r.y0) * mg;
+      var r2 = { x0: r.x0 - mw, x1: r.x1 + mw, y0: r.y0 - mh, y1: r.y1 + mh };
+      var t = renderTile(r2, CW * dpr * (1 + mg * 2), CH * dpr * (1 + mg * 2));
+      t.cov = r2; t.vs = V.s; P.hi = t;
       draw();
-    }, 280);
+    }, 320);
   }
 
   function linesOf(f) {
@@ -4295,6 +4306,22 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   function drawLive() {
     ctx2.setTransform(dpr, 0, 0, dpr, 0, 0); ctx2.clearRect(0, 0, CW, CH);
     if (G && G.type === 'draw' && G.pts.length >= 2) drawStroke(ctx2, G.pts, G.straight ? null : G.pr, curC(), curW() / V.s);
+  }
+  // 指で動かしている間は、描いた絵をそのまま動かす(毎回描き直さない → 指にぴったりついてくる)
+  var XF = null, xfRaf = false, xfLast = 0;
+  function reqXf() {
+    if (xfRaf) return; xfRaf = true;
+    requestAnimationFrame(function () {
+      xfRaf = false;
+      if (!P) return;
+      if (!XF) { draw(); return; }
+      var k = V.s / XF.s, tx = (XF.ax - V.ax) * V.s, ty = (V.ay - XF.ay) * V.s;
+      // 見えていない所が大きく出てきたら、ときどき本当に描き直す
+      var gap = Math.max(Math.abs(tx), Math.abs(ty), CW * (1 - k), CH * (1 - k), Math.abs(tx + CW * k - CW), Math.abs(ty + CH * k - CH));
+      var now = Date.now();
+      if (gap > Math.min(CW, CH) * 0.3 && now - xfLast > 180) { xfLast = now; draw(); return; }
+      cv.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + k + ')';
+    });
   }
   function draw() {
     if (!P) return;
@@ -4366,7 +4393,8 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       if (popN === n) { ctx.strokeStyle = '#e8a10b'; ctx.lineWidth = 3; ctx.strokeRect(sx(n.x) - 7, sy(n.y) - 6, w + 14, ls.length * pitch + 10); }
     });
     drawSel();
-    progress();
+    if (!G || !/^(pan|pinch|drag|dragAdd)$/.test(G.type)) progress();
+    XF = { s: V.s, ax: V.ax, ay: V.ay }; if (cv.style.transform) cv.style.transform = '';
     // 旗揚げを置くときの印
     if (P.pick && P.pick.ax != null) {
       ctx.fillStyle = '#d22c2c'; ctx.beginPath(); ctx.arc(sx(P.pick.ax), sy(P.pick.ay), 6, 0, 7); ctx.fill();
@@ -4441,14 +4469,17 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     if (hist.length > 80) hist.shift();
     hpos = hist.length - 1;
     applyOmoves(); updUndo(); draw(); updateColors();
-    clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 400);
+    clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 1500);
   }
   function saveNow() {
-    clearTimeout(saveTimer);
+    clearTimeout(saveTimer); saveTimer = null;
     if (!P) return Promise.resolve();
     P.rec.updated = Date.now();
     return dbPut(P.rec);
   }
+  // アプリを閉じる・切り替えるときは、待たずにすぐ保存
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden' && saveTimer) saveNow(); });
+  window.addEventListener('pagehide', function () { if (saveTimer) saveNow(); });
   function updUndo() { $('#undobtn').disabled = hpos <= 0; $('#redobtn').disabled = hpos >= hist.length - 1; }
   function undo() { if (hpos > 0) { hidePop(); SEL = null; popS = false; hpos--; P.rec.edits = JSON.parse(hist[hpos]); applyOmoves(); updUndo(); draw(); updateColors(); saveNow(); } }
   function redo() { if (hpos < hist.length - 1) { hidePop(); SEL = null; popS = false; hpos++; P.rec.edits = JSON.parse(hist[hpos]); applyOmoves(); updUndo(); draw(); updateColors(); saveNow(); } }
@@ -4548,14 +4579,14 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       var s = Math.max(1e-6, G.v0.s * d / G.d0);
       var X = G.v0.ax + G.m0.x / G.v0.s, Y = G.v0.ay - G.m0.y / G.v0.s;
       V.s = s; V.ax = X - m.x / s; V.ay = Y + m.y / s;
-      reqDraw(); return;
+      reqXf(); return;
     }
     if (G.id !== e.pointerId) return;
     if (G.type === 'pan') {
       G.moved = Math.max(G.moved, Math.hypot(p.x - G.x0, p.y - G.y0));
       if (G.moved > 6) hidePop();
       V.ax = G.v0.ax - (p.x - G.x0) / V.s; V.ay = G.v0.ay + (p.y - G.y0) / V.s;
-      reqDraw(); return;
+      reqXf(); return;
     }
     if (G.type === 'lasso' || G.type === 'drag') { lassoMove(p); return; }
     if (G.type === 'dragAdd') {
@@ -4614,7 +4645,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       }
       if (G && G.type === 'pinch') {
         if (touches.size === 1) { var rest = Array.from(touches.entries())[0]; startPan(rest[1], rest[0]); G.moved = 99; }
-        else if (!touches.size) { G = null; P.hi = null; schedHi(); }
+        else if (!touches.size) { G = null; draw(); schedHi(); }
         return;
       }
     }
@@ -4623,7 +4654,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     var isTap = (g.moved || 0) < 8 && Date.now() - g.t0 < 500;
     if (g.type === 'pan') {
       if (isTap && e.type !== 'pointercancel') onTap(p);
-      else { P.hi = null; schedHi(); }
+      else schedHi();
       draw(); return;
     }
     if (g.type === 'dragAdd') { if (g.moved > 6) commit(); else if (e.type !== 'pointercancel') onTap(p); return; }
@@ -4905,6 +4936,9 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   function progress() {
     if (!P) return;
     var n = P.flags.length, k = P.flags.filter(function (f) { var e = P.rec.edits.flags[f.key]; return e && !e.moveOnly; }).length;
+    var sig = P.rec.id + ':' + k + '/' + n + ':' + hpos + ':' + (P.rec.updated || 0);
+    if (progress.sig === sig) return;
+    progress.sig = sig;
     updElBtn();
     $('#prog').innerHTML = '<span>確認 <b>' + k + '</b> / ' + n + '</span><span class="bar"><i style="width:' + (n ? Math.round(k / n * 100) : 0) + '%"></i></span>';
   }
@@ -6708,7 +6742,21 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
 <script>
 // ネット上のページで開いたとき:電波のない現場でも開けるようにする(ホーム画面に追加して使う)
 if ('serviceWorker' in navigator && /^https:$|^http:$/.test(location.protocol) && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-  navigator.serviceWorker.register('sw.js').catch(function () {});
+  // 新しい版がとどいたら「更新」ボタンを出す(書いている途中で勝手に切り替えない)
+  var hadCtl = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (!hadCtl) { hadCtl = true; return; }
+    if (document.getElementById('upd')) return;
+    var d = document.createElement('div'); d.id = 'upd';
+    d.innerHTML = '新しい版の野帳がとどきました <button>更新する</button><button class="no">あとで</button>';
+    d.querySelector('button').onclick = function () { d.textContent = '更新しています…'; setTimeout(function () { location.reload(); }, 900); };
+    d.querySelector('.no').onclick = function () { d.remove(); };
+    document.body.appendChild(d);
+  });
+  navigator.serviceWorker.register('sw.js').then(function (reg) {
+    // 開いたとき・アプリに戻ってきたときに新しい版がないか見に行く(電波がなければ何もしない)
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') reg.update().catch(function () {}); });
+  }).catch(function () {});
 }
 </script>
 </body>
