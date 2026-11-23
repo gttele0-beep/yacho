@@ -6261,8 +6261,9 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     var gl = lines.filter(function (l, i) { return i > 0 && gradeOf(l); });
     var allNew = gl.length > 0 && gl.every(function (l) { return l.c === 'r' && l.rf == null; });
     void anyRed;
-    var hc = allNew ? 'r' : 'k';
-    lines.forEach(function (l, i) { if ((i === 0 || /^\s*写真/.test(l.t)) && l.c !== 'b') l.c = hc; });
+    var allRep = gl.length > 0 && gl.every(function (l) { return l.c === 'b'; });
+    var hc = allNew ? 'r' : allRep ? 'b' : 'k';   // 損傷が全部「新規」なら部材名・写真番号も赤、全部「補修」なら青
+    lines.forEach(function (l, i) { if (i === 0 || /^\s*写真/.test(l.t)) l.c = hc; });
     return lines;
   }
 
