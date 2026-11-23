@@ -18,7 +18,7 @@
   --sh2:0 2px 6px rgba(16,32,24,.10),0 12px 32px rgba(16,32,24,.16);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",sans-serif;font-size:16px;overscroll-behavior:none;-webkit-font-smoothing:antialiased}
+html,body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",sans-serif;font-size:16px;overscroll-behavior:none;-webkit-font-smoothing:antialiased}
 svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
 button{font:inherit;color:inherit;border:1px solid var(--line);background:var(--paper);border-radius:12px;padding:8px 14px;min-height:44px;cursor:pointer;transition:background .15s,transform .08s,box-shadow .15s;display:inline-flex;align-items:center;justify-content:center;gap:6px}
 button:active{transform:scale(.97)}
@@ -82,6 +82,8 @@ input:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0
 #stage{position:absolute;inset:0;overflow:hidden;touch-action:none}
 #cv,#cv2{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 #cv{transform-origin:0 0;will-change:transform}
+input,textarea,select,[contenteditable]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
+#stage{touch-action:none;-webkit-user-select:none;user-select:none}
 #upd{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:9999;background:#1f7a4d;color:#fff;border-radius:22px;padding:10px 16px;font-size:15px;box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;gap:10px;align-items:center}
 #upd button{background:#fff;color:#1f7a4d;border:0;border-radius:16px;padding:6px 14px;font-weight:bold;font-size:15px}
 #upd .no{background:transparent;color:#fff;padding:6px 6px}
@@ -4390,6 +4392,24 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     g.lineWidth = W(n - 1); g.beginPath(); g.moveTo(px, py); g.lineTo(X(n - 1), Y(n - 1)); g.stroke();
   }
   // 書いている途中の線は上の層だけに描く(図面は描き直さない → ペンに遅れずついてくる)
+  // 書いている途中は、増えた分だけ描き足す(線が長くなっても重くならない)
+  function liveInc() {
+    if (!G || G.type !== 'draw') return;
+    var c = curC();
+    if (G.straight || isHl(c) || G.pts.length < 4) { drawLive(); G.li = 0; return; }
+    var g = ctx2, pts = G.pts, pr = G.pr, n = pts.length / 2, base = curW();
+    var X = function (i) { return sx(pts[2 * i]); }, Y = function (i) { return sy(pts[2 * i + 1]); };
+    var W = function (i) { return base * (0.55 + 0.9 * (pr && pr[i] != null ? pr[i] : 0.5)); };
+    g.setTransform(dpr, 0, 0, dpr, 0, 0); g.strokeStyle = COL[c] || COL.k; g.lineCap = 'round'; g.lineJoin = 'round';
+    if (!G.li) { g.clearRect(0, 0, CW, CH); G.li = 1; G.lx = X(0); G.ly = Y(0); }
+    for (var k = G.li; k < n - 1; k++) {
+      var mx = (X(k) + X(k + 1)) / 2, my = (Y(k) + Y(k + 1)) / 2;
+      g.lineWidth = W(k); g.beginPath(); g.moveTo(G.lx, G.ly); g.quadraticCurveTo(X(k), Y(k), mx, my); g.stroke();
+      G.lx = mx; G.ly = my;
+    }
+    G.li = Math.max(G.li, n - 1);
+    g.lineWidth = W(n - 1); g.beginPath(); g.moveTo(G.lx, G.ly); g.lineTo(X(n - 1), Y(n - 1)); g.stroke();   // ペン先まで
+  }
   function drawLive() {
     ctx2.setTransform(dpr, 0, 0, dpr, 0, 0); ctx2.clearRect(0, 0, CW, CH);
     if (G && G.type === 'draw' && G.pts.length >= 2) drawStroke(ctx2, G.pts, G.straight ? null : G.pr, curC(), curW() / V.s);
@@ -4580,6 +4600,12 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
 
   // ---------------- 指・ペンの操作 ----------------
   var touches = new Map();
+  // 手のひら・手の側面:ペンを使っている間とその直後の指、接している面が大きい指は無視する
+  var palms = new Set(), lastPen = 0;
+  function isPalm(e) { return (e.width || 0) >= 32 || (e.height || 0) >= 32; }
+  // 画面の長押しで文字が選ばれる・虫めがねが出るのを止める(入力欄はそのまま)
+  document.addEventListener('selectstart', function (e) { if (!(e.target.closest && e.target.closest('input,textarea,[contenteditable]'))) e.preventDefault(); });
+  $('#stage').addEventListener('touchstart', function (e) { if (e.target === cv2) e.preventDefault(); }, { passive: false });
   var G = null;   // いまの操作 {type:'pan'|'pinch'|'draw'|'erase', ...}
   var penActive = false;
   var MT = null;  // 2本・3本指のタップ(元に戻す・やり直す)
@@ -4631,7 +4657,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     try { cv2.setPointerCapture(e.pointerId); } catch (x) { /* なし */ }
     var p = pt(e);
     if (e.pointerType === 'touch') {
-      if (penActive) return;                       // ペンで書いている間は手のひらを無視
+      if (penActive || isPalm(e) || Date.now() - lastPen < 600) { palms.add(e.pointerId); return; }   // ペンの間・直後、大きな接触は手のひら
       touches.set(e.pointerId, p);
       if (!MT || touches.size === 1) MT = { t0: Date.now(), max: 0, moved: 0, start: new Map() };
       MT.start.set(e.pointerId, p); MT.max = Math.max(MT.max, touches.size);
@@ -4647,7 +4673,17 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       return;
     }
     // ペン・マウス
-    if (e.pointerType === 'pen') { penActive = true; if (lzPend) { clearTimeout(lzT); lzT = setTimeout(flushLazy, 900); } }
+    if (e.pointerType === 'pen') {
+      penActive = true; lastPen = Date.now();
+      if (lzPend) { clearTimeout(lzT); lzT = setTimeout(flushLazy, 900); }
+      // ペンより先に手が触れて図面が動いていたら、元の位置に戻して手は無視する
+      if (touches.size) {
+        if (G && (G.type === 'pan' || G.type === 'pinch') && G.v0) { V.s = G.v0.s; V.ax = G.v0.ax; V.ay = G.v0.ay; draw(); }
+        else if (G && G.type === 'draw') { G = null; drawLive(); }
+        touches.forEach(function (q, id) { palms.add(id); }); touches.clear(); MT = null;
+        if (G && G.type !== 'draw') G = null;
+      }
+    }
     if (G && G.type === 'pinch') return;
     if (tool === 'lasso') { lassoDown(p, e.pointerId); return; }
     if (tool === 'stamp') { hidePop(); G = { type: 'stamp', id: e.pointerId, start: p, cur: p, t0: Date.now(), moved: 0 }; return; }
@@ -4657,6 +4693,8 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   }, { passive: false });
   cv2.addEventListener('pointermove', function (e) {
     if (!P) return;
+    if (palms.has(e.pointerId)) return;
+    if (e.pointerType === 'pen') lastPen = Date.now();
     var p = pt(e);
     if (e.pointerType === 'touch' && touches.has(e.pointerId)) {
       touches.set(e.pointerId, p);
@@ -4717,13 +4755,14 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
         G.pts.push(wx(q.x), wy(q.y)); G.pr.push(pres(ce)); G.last = q; any = true;
       });
       if (any) armStraight();
-      drawLive();
+      liveInc();
     } else if (G.type === 'erase') eraseAt(p);
   }, { passive: false });
   function endPointer(e) {
     if (!P) return;
+    if (palms.has(e.pointerId)) { palms.delete(e.pointerId); return; }
     var p = pt(e);
-    if (e.pointerType === 'pen') penActive = false;
+    if (e.pointerType === 'pen') { penActive = false; lastPen = Date.now(); }
     if (e.pointerType === 'touch') {
       touches.delete(e.pointerId);
       // 2本指タップ=元に戻す、3本指タップ=やり直す(グッドノートと同じ)
