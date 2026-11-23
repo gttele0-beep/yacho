@@ -1097,7 +1097,7 @@ function parseYacho(ents) {
     found = true;
     ls.slice(1).forEach((l) => {
       const a = l.trim().split(/\s+/);
-      if (a[0] === 'N' && a.length >= 3) out.non.push({ span: a[1], key: a[2] });
+      if (a[0] === 'N' && a.length >= 3) out.non.push({ span: a[1], key: a[2], added: a[3] === '+' });   // + は野帳で現場で足した要素
       else if (a[0] === 'T' && a.length >= 3) out.shots.push({ id: a[1], t: +a[2] * 1000 });
       else if (a[0] === 'G' && a.length >= 3) out.gen.push({ uid: a[1], ids: a[2].split(',').filter(Boolean), idx: a[3] != null && a[3] !== '-' ? +a[3] : null, memo: a.length > 4 ? a.slice(4).join(' ').replace(/\\~/g, ' ') : '' });
     });
@@ -7174,7 +7174,8 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     });
     // 現場で確かめたこと(NON-aの要素・現地状況写真の写真ID)→ 調書作成システムが読む
     var info = ['YACHO1'];
-    Object.keys(ed.non || {}).forEach(function (k) { var a = k.split('|'); info.push('N ' + (a[0] === '*' ? '1' : a[0]) + ' ' + a[1]); });
+    var addedK = {}; (ed.extraEls || []).forEach(function (e) { addedK[e.span + '|' + e.sym + e.el] = 1; });
+    Object.keys(ed.non || {}).forEach(function (k) { var a = k.split('|'); info.push('N ' + (a[0] === '*' ? '1' : a[0]) + ' ' + a[1] + (addedK[k] ? ' +' : '')); });   // + = 現場で足した要素
     var gpk = (rec.pack && rec.pack.gen) || [];
     Object.keys(ed.gen || {}).forEach(function (u) {
       var ids = ed.gen[u] || []; if (!ids.length) return; var g = gpk.filter(function (x) { return x.uid === u; })[0];
