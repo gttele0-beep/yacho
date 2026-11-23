@@ -215,6 +215,10 @@ input,textarea,select,[contenteditable]{-webkit-user-select:text;user-select:tex
 #hwbar .hwr button{min-width:42px;min-height:42px;font-weight:700;font-size:17px;padding:4px 8px}
 #hwbar .hwr button.on{background:var(--acc-d);color:#fff;border-color:var(--acc-d)}
 #hwbar .hwr button.pri,#hwbar .hwr button.ghost{font-size:14px;font-weight:600}
+#pop .crk{display:flex;align-items:center;gap:4px;margin-top:4px;flex-wrap:wrap}
+#pop .crk button{min-width:34px;min-height:30px;padding:2px 8px;font-size:14px}
+#pop .crk button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+#pop .crk .small{margin:0 2px 0 6px}
 #hwbar .hwph{margin-top:8px;padding-top:8px;border-top:1px solid rgba(0,0,0,.08)}
 #hwbar .hwph .ids{font-size:13px;color:var(--acc-d);font-weight:600}
 #hwbar .hwr button.rep,#pop .grades button.rep{color:var(--blue);font-size:14px}
@@ -4999,7 +5003,14 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       var nm = it.l.t.replace(/[-－]\s*[a-eａ-ｅ](\s*→\s*[a-eａ-ｅ])?.*$/, '');
       h += '<div class="it"><div class="nm">' + esc(nm) + (it.g.prev ? ' <span class="small">前回 <b>' + it.g.prev + '</b></span>' : '') + '</div><div class="grades">' +
         ['a', 'b', 'c', 'd', 'e'].map(function (x) { return '<button data-pg="' + it.i + ':' + x + '" class="' + (it.g.now === x ? 'on' : '') + '">' + x + '</button>'; }).join('') +
-        '<button data-prep="' + it.i + '" class="rep' + (it.l.c === 'b' ? ' on' : '') + '" title="補修した損傷は青くなります">補修</button></div></div>';
+        '<button data-prep="' + it.i + '" class="rep' + (it.l.c === 'b' ? ' on' : '') + '" title="補修した損傷は青くなります">補修</button></div>';
+      // ひびわれ:(幅 間隔)の区分 例 (小小)
+      if (/ひびわれ/.test(it.l.t)) {
+        var cm = /\((大|中|小)(大|小)\)/.exec(it.l.t) || [];
+        h += '<div class="crk"><span class="small">幅</span>' + ['小', '中', '大'].map(function (x) { return '<button data-pcw="' + it.i + ':' + x + '" class="' + (cm[1] === x ? 'on' : '') + '">' + x + '</button>'; }).join('') +
+          '<span class="small">間隔</span>' + ['小', '大'].map(function (x) { return '<button data-pcs="' + it.i + ':' + x + '" class="' + (cm[2] === x ? 'on' : '') + '">' + x + '</button>'; }).join('') + '</div>';
+      }
+      h += '</div>';
     });
     if (!items.length) h += '<div class="small" style="margin:4px">程度のある行がありません(「詳しく」で直せます)</div>';
     // 4. 損傷を足す
@@ -5078,6 +5089,15 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       var lst = popPP.map(function (p) { return { url: fileUrl(p.file), title: '前回の写真 ' + p.sym + p.el, cap: [p.dmg + (p.grade ? '-' + p.grade : ''), p.memo].filter(Boolean).join('\n') }; });
       openViewer(lst, +v, function (id) { var c3 = curOf(f); c3.ids.push(id); c3.ok = true; putFlag(f, c3); if (popF === f) showPop(f); });
       return;
+    }
+    if ((v = b.getAttribute('data-pcw') || b.getAttribute('data-pcs'))) {
+      var ci = +v.split(':')[0], cv = v.split(':')[1], cl = cur.lines[ci]; if (!cl) return;
+      var cm2 = /\((大|中|小)(大|小)\)/.exec(cl.t), w = cm2 ? cm2[1] : '小', sp = cm2 ? cm2[2] : '小';
+      if (b.getAttribute('data-pcw')) w = cv; else sp = cv;
+      var tag = '(' + w + sp + ')';
+      if (cm2) cl.t = cl.t.replace(cm2[0], tag);
+      else { var gm = /[-－]\s*[a-eａ-ｅ](\s*→\s*[a-eａ-ｅ])?/.exec(cl.t); cl.t = gm ? cl.t.slice(0, gm.index + gm[0].length) + tag + cl.t.slice(gm.index + gm[0].length) : cl.t + tag; }
+      cur.ok = true; putFlag(f, cur); showPop(f); return;
     }
     if ((v = b.getAttribute('data-prep'))) { setRepair(cur.lines, +v, cur.lines[+v].c !== 'b'); cur.ok = true; putFlag(f, cur); showPop(f); return; }
     if ((v = b.getAttribute('data-pg'))) { var q = v.split(':'); setGrade(cur.lines[+q[0]], q[1]); recolor(cur.lines); cur.ok = true; putFlag(f, cur); showPop(f); return; }
