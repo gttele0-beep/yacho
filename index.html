@@ -128,6 +128,8 @@ input:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0
 
 /* 要素・状況写真 */
 #elbtn{min-height:40px;padding:6px 12px;white-space:nowrap}
+#inkbtn{position:relative}
+#inkbtn .cnt{position:absolute;top:0;right:0;background:var(--red);color:#fff;border-radius:10px;padding:0 6px;font-size:11px;line-height:16px}
 #elbtn .cnt{background:var(--red);color:#fff;border-radius:12px;padding:1px 8px;font-size:12px;min-width:22px}
 #elbtn .cnt.ok{background:var(--acc)}
 #elpanel{position:fixed;inset:0;z-index:45;background:var(--bg);display:flex;flex-direction:column}
@@ -380,6 +382,7 @@ input:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0
       <button data-tool="text" title="文字メモ"><svg class="i"><use href="#i-text"/></svg><span>文字</span></button>
       <button data-tool="stamp" title="凡例"><svg class="i"><use href="#i-stamp"/></svg><span>凡例</span></button>
       <button data-tool="flag" title="旗揚げを足す"><svg class="i"><use href="#i-flag"/></svg><span>旗揚げ</span></button>
+      <button id="inkbtn" title="赤ペンで書いた手書きを旗揚げの文字にする"><svg class="i"><use href="#i-check"/></svg><span>手書き読取</span><b id="inkcnt" class="cnt hide"></b></button>
     </div>
     <span class="sep"></span>
     <div id="opts" class="tg"></div>
@@ -3325,6 +3328,13 @@ const GNREAD = (() => {
         if (g.w > g.h * 2 && g.w < Hl * 1.0 && g.h < Hl * 0.35) { out += '-'; return; }   // 短い横線はハイフン(矢印は長い)
         if (g.stks.length === 1) {
           const p = g.stks[0], b = bbox(p), w = b.x1 - b.x0, h = b.y1 - b.y0, st = straight(p);
+          // かっこ「[」「]」:縦に長く、まんなかの縦線が片側に寄っていて、両はしが反対側にある
+          if (h > w * 1.6 && h >= Hl * 0.85 && st < 0.85 && p.length >= 3) {
+            const dp = []; for (let i = 1; i < p.length; i++) { const n = Math.max(1, Math.ceil(Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]) / (h / 30))); for (let k = 0; k < n; k++) dp.push([p[i - 1][0] + (p[i][0] - p[i - 1][0]) * k / n, p[i - 1][1] + (p[i][1] - p[i - 1][1]) * k / n]); }
+            const mid = dp.filter((q) => q[1] > b.y0 + h * 0.3 && q[1] < b.y1 - h * 0.3), mx = mid.length ? mid.reduce((a, q) => a + q[0], 0) / mid.length : (b.x0 + b.x1) / 2;
+            const e0 = p[0][0], e1 = p[p.length - 1][0], cx = (b.x0 + b.x1) / 2;
+            if ((mx < b.x0 + w * 0.3 && e0 > cx && e1 > cx) || (mx > b.x1 - w * 0.3 && e0 < cx && e1 < cx)) { out += ' '; return; }
+          }
           if (st > 0.85 && w > h * 2.2) { const ra = rec(g.stks, ['→']); if (ra[0] && ra[0].d < 2.2 && w > Hl * 1.1) { out += '→'; return; } out += '-'; return; }
           if (st > 0.85 && h > w * 0.6 && w > h * 0.25) { const a = p[0], z = p[p.length - 1]; const rising = (z[0] - a[0]) * (z[1] - a[1]) < 0; if (rising) { out += '/'; return; } }
         }
@@ -3484,11 +3494,21 @@ const GNREAD = (() => {
           const t = l.read.text, o = l.read.ocr;
           const hm = /([A-Z][a-z])\s*(\d{4})?/.exec(o || '');
           if (k === 0 && hm) { header = hm[1] + (hm[2] || ''); const rest = t.replace(/^[^0-9]*\d{4}/, ''); if (!/\d/.test(rest)) return; }
-          let any = false;
+          // GoodNotesの読みがないとき(野帳の中で書いたとき):1行目の数字3〜4けた以上は要素番号(部材記号はあとで近くの旗揚げから決める)
+          if (k <= 1 && !header && !dmg.length && !o) {
+            const dg = (t.match(/\d/g) || []).join('');
+            if (dg.length >= 3 && !/(^|\s)\d{1,2}\s*[a-e](\s|$)/.test(t) && !/^[-ー]\s*\d/.test(t)) { header = dg.slice(-4).padStart(4, '0'); return; }
+          }
+          let any = false; const ld = [], lm = [];
           parseTokens(t, (kind, v) => {
             if (kind === 'photo') { ids.push(v); any = true; }
-            else if (kind === 'dmg') { dmg.push(v); any = true; }
+            else if (kind === 'dmg') lm.push(v);
+            else if (kind === 'dim') ld.push(v.w != null ? v.w + ' ' + v.l : [v.a, v.b, v.c].filter(Boolean).join(' '));
           });
+          // 寸法([200×200] など)は、同じ行の損傷か、なければ上の行の損傷につける
+          if (ld.length && lm.length) lm[lm.length - 1] = (lm[lm.length - 1] + ' ' + ld.join(' ')).trim();
+          else if (ld.length && dmg.length) { dmg[dmg.length - 1] += ' ' + ld.join(' '); any = true; }
+          if (lm.length) { lm.forEach((x) => dmg.push(x)); any = true; }
           if (!any) memo.push(t);
         });
         return { tip: a.tip, te: a.te, box: a.box, leader: a.leader, header, text: dmg.join(', '), ids, memo, lines: a.lines, unsure: a.lines.some((l) => l.read.unsure || l.read.kanji) || !dmg.length };
@@ -3512,7 +3532,7 @@ const GNREAD = (() => {
 
     // 行の文字を細かく分ける:写真番号(-150, -125,126, -K150)・進行(→d)・寸法(0.1/800, 600×50)・損傷(8d)
     function parseTokens(t, cb) {
-      let s = String(t || '').normalize('NFKC').replace(/[xX]/g, '×').replace(/\s+/g, ' ').trim();
+      let s = String(t || '').normalize('NFKC').replace(/[xX]/g, '×').replace(/[\[\]()]/g, ' ').replace(/\s+/g, ' ').trim();
       // 写真番号
       s = s.replace(/[-ー―‐]\s*([A-Z]?)\s*(\d{2,4})((?:\s*[,.]\s*\d{2,4})*)/g, (m0, ini, a, rest) => {
         cb('photo', { ini, n: a });
@@ -3522,7 +3542,7 @@ const GNREAD = (() => {
       s = s.replace(/→\s*([a-e])/g, (m0, g) => { cb('prog', g); return ' '; });
       s = s.replace(/(\d*\.\d+|\d+)\s*\/\s*(\d+)/g, (m0, w, l) => { cb('dim', { w, l }); return ' '; });
       s = s.replace(/(\d+)\s*×\s*(\d+)(?:\s*×\s*(\d+))?/g, (m0, a, b, c) => { cb('dim', { a, b, c }); return ' '; });
-      s = s.replace(/(?:^|\s)(\d{1,2})\s*([a-e])(?=\s|$)([\s\d.×]*)/g, (m0, k, g, rest) => { cb('dmg', k + g + (rest ? ' ' + rest.trim() : '')); return ' '; });
+      s = s.replace(/(?:^|\s)(\d{1,2})\s*([a-e])(?=\s|$)([\s\d.×]*)/g, (m0, k, g, rest) => { cb('dmg', (k + g + ' ' + (rest || '').trim()).trim()); return ' '; });
       s.trim().split(/\s+/).forEach((w) => { if (/^[a-e]$/.test(w)) cb('letter', w); else if (/^\d{2,4}$/.test(w)) cb('num', w); });
     }
     function gradeIdxs(f) { const out = []; (f.lines || []).forEach((l, i) => { if (/[-－]\s*[a-eａ-ｅ](\s*→\s*[a-eａ-ｅ])?/.test(l.t || '') && /^[①-⑳㉑-㉟]|NON/.test(l.t || '')) out.push(i); }); return out; }
@@ -3889,6 +3909,9 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       '<div class="foot" style="flex-direction:column;align-items:stretch;gap:8px">' +
       '<button class="pri" data-gn="export">' + SVG('save') + '① GoodNotes用のPDFを書き出す(' + viewCount() + '枚)</button>' +
       '<button data-gn="import"' + (g ? '' : ' disabled') + '>' + SVG('img') + '② GoodNotesで書いたPDFを読み込む</button>' +
+      '<hr style="width:100%;border:0;border-top:1px solid #ddd;margin:4px 0">' +
+      '<button class="pri" data-gn="ink"' + (inkCount() ? '' : ' disabled') + '>' + SVG('pen') + 'この野帳に赤ペンで書いた手書きを読み取る(' + inkCount() + '本)</button>' +
+      '<span class="small">新規は「引出線+部材番号・損傷・程度・寸法・写真番号」を赤ペンで。前回の旗揚げの横に書いた「→d」「-46」なども読み取ります。黒ペンは読みません</span>' +
       (g ? '<span class="small">書き出したPDF:' + new Date(g.at).toLocaleString() + '(' + g.pages.length + '枚)</span>' : '<span class="small">先に①でPDFを書き出してください(図面の位置を戻すために使います)</span>') + '</div>';
   }
   function viewCount() { var a = (P.aframes || []).filter(function (f) { return !f.noFrame; }); return a.length || P.frames.length; }
@@ -3968,6 +3991,46 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       buildGR(); drawGR();
     }).catch(function (e) { toast('PDFを読めませんでした: ' + e.message, 6000); });
   }
+  // ---- 野帳の中で赤ペンで書いた手書きを読み取る(GoodNotesと同じ読み方) ----
+  function inkStrokes() { return P ? P.rec.edits.strokes.filter(function (s) { return s.c === 'r' && s.pts.length >= 4; }) : []; }
+  function inkCount() { return inkStrokes().length; }
+  function readInk() {
+    var src = inkStrokes();
+    if (!src.length) { toast('赤ペンの手書きがありません', 3000); return; }
+    toast('手書きを読んでいます…', 1500);
+    setTimeout(function () {
+      var ink = src.map(function (s) { var pts = []; for (var i = 0; i + 1 < s.pts.length; i += 2) pts.push([s.pts[i], s.pts[i + 1]]); return { kind: 'r', pts: pts, src: s }; });
+      var flags = P.flags.map(function (f) { var ls = linesOf(f); return { key: f.key, box: fb(f), h: f.h || P.hMed, lines: ls, n: ls.length, f: f }; });
+      var res = GNR.interpret(ink, [], flags, P.hMed, null);
+      var srcOf = new Map(); ink.forEach(function (q) { srcOf.set(q.pts, q.src); });
+      GR = { res: res, ink: ink, flags: flags, warn: [], nRed: ink.length, inApp: true, srcOf: srcOf };
+      buildGR(); drawGR();
+    }, 30);
+  }
+  // 要素番号だけ読めたとき:部材記号を近くの旗揚げから決める(同じ番号があればそれ、なければいちばん近い旗揚げの記号)
+  function guessSym(num, x, y) {
+    var same = null, best = null, bd = Infinity;
+    P.flags.forEach(function (f) {
+      var hd = f.raw.split('\n')[0], re = /([A-Z][a-z])(\d{4})/g, m;
+      while ((m = re.exec(hd))) {
+        if (m[2] === num && !same) same = m[1];
+        var b = f.box, d = Math.hypot((b.x0 + b.x1) / 2 - x, (b.y0 + b.y1) / 2 - y);
+        if (inFrame(f.x, f.y) && d < bd) { bd = d; best = m[1]; }
+      }
+    });
+    if (same) return same;
+    // 同じ番号がなければ、番号の前2けた(または後ろ2けた)が同じ旗揚げのうち、いちばん近いものの記号
+    var pre = null, pd = Infinity;
+    P.flags.forEach(function (f) {
+      var hd = f.raw.split('\n')[0], re = /([A-Z][a-z])(\d{4})/g, m;
+      while ((m = re.exec(hd))) {
+        if (m[2].slice(0, 2) !== num.slice(0, 2) && m[2].slice(2) !== num.slice(2)) continue;
+        var b = f.box, d = Math.hypot((b.x0 + b.x1) / 2 - x, (b.y0 + b.y1) / 2 - y) * (m[2].slice(0, 2) === num.slice(0, 2) ? 1 : 1.5);
+        if (inFrame(f.x, f.y) && d < pd) { pd = d; pre = m[1]; }
+      }
+    });
+    return pre || best || '';
+  }
   function gnId(o) { var n = String(o.n); return n.length >= 4 ? photoDate() + (o.ini || SET.who || 'X') + n : photoDate() + (o.ini || SET.who || 'X') + n.padStart(3, '0'); }
   // 確認画面の中身(直せるように、決めた内容を持つ)
   function buildGR() {
@@ -3981,6 +4044,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     });
     r.adds.forEach(function (a) {
       var cands = nearHeaders(a.tip[0], a.tip[1]);
+      if (/^\d{4}$/.test(a.header || '')) a.header = guessSym(a.header, a.tip[0], a.tip[1]) + a.header;
       var hd = a.header ? (/\d{4}$/.test(a.header) ? memberName(a.header.slice(0, 2)) + a.header : (cands.filter(function (c) { return c.indexOf(a.header) >= 0; })[0] || memberName(a.header) + a.header)) : (cands[0] || '');
       GR.items.push({ type: 'add', on: true, a: a, header: hd, cands: cands, text: a.text, ids: a.ids.map(gnId).join(', '), box: ubox(a.box, { x0: a.tip[0], y0: a.tip[1], x1: a.tip[0], y1: a.tip[1] }) });
     });
@@ -4006,7 +4070,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   var GCOL = { r: '#d62828', k: '#222', b: '#1d5fa8' };
   function drawGR() {
     var n = { flag: 0, add: 0, gen: 0, memo: 0 }; GR.items.forEach(function (i) { if (n[i.type] != null) n[i.type]++; });
-    var h = '<h3>' + SVG('gn') + 'GoodNotesの書き込みの確認<button class="x" data-gr="close">✕</button></h3>' +
+    var h = '<h3>' + SVG('gn') + (GR.inApp ? '手書きの読み取りの確認' : 'GoodNotesの書き込みの確認') + '<button class="x" data-gr="close">✕</button></h3>' +
       '<div class="small">赤ペンの線 ' + GR.nRed + ' 本を読みました。旗揚げへの書き込み ' + n.flag + '件・新規 ' + n.add + '件・状況写真 ' + n.gen + '件・読めなかったメモ ' + n.memo + '件。左の図の<b style="color:#d62828">赤</b>が手書き、<b style="color:#1d5fa8">青い枠</b>が振り分けた先です。違うところだけ直して「まとめて入れる」。</div>' +
       (GR.warn.length ? '<div class="small" style="color:#b25b00">' + esc(GR.warn.join(' / ')) + '</div>' : '');
     var sec = '';
@@ -4087,8 +4151,21 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   function parseIds(s) { return String(s || '').split(/[,、\s]+/).map(function (x) { return x.trim(); }).filter(Boolean); }
   function applyGR() {
     var ed = P.rec.edits, nf = 0, na = 0, ng = 0, hc = GR.res.hc || P.hMed;
+    // 野帳の中で書いた手書き:文字にしたものは、元の手書きの線を消す(形・読まなかったものはそのまま残す)
+    if (GR.inApp) {
+      var gone = new Set(), addS = function (arr) { (arr || []).forEach(function (st) { var s0 = GR.srcOf.get(st.pts); if (s0) gone.add(s0); }); };
+      GR.items.forEach(function (it) {
+        if (!it.on) return;
+        if (it.type === 'flag') { it.it.lines.forEach(function (l) { addS(l.strokes); }); addS(it.it.xStrokes); }
+        else if (it.type === 'add') { it.a.lines.forEach(function (l) { addS(l.strokes); }); addS([it.a.leader]); }
+        else if (it.type === 'gen' && it.uid) addS(it.g.line.strokes);
+        else if (it.type === 'memo') addS(it.m.line.strokes);
+      });
+      ed.strokes = ed.strokes.filter(function (s) { return !gone.has(s); });
+    }
     GR.items.forEach(function (it) {
       if (!it.on) return;
+      if (GR.inApp && it.type === 'shape') return;
       if (it.type === 'flag') {
         var f = it.fo.f, cur = curOf(f);
         cur.lines = previewLines(it);
@@ -4116,6 +4193,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     GR = null;
   }
   $('#gnbtn').onclick = function () { hidePop(); openGN(); };
+  $('#inkbtn').onclick = function () { hidePop(); if (SEL) clearSel(); readInk(); };
   $('#gnfile').onchange = function () { var f = this.files[0]; this.value = ''; if (f) { $('#dlg2').classList.add('hide'); importGN(f); } };
   $('#sheet2').addEventListener('click', function (e) {
     var md = $('#sheet2').dataset.mode;
@@ -4126,6 +4204,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       if (v === 'close') { $('#dlg2').classList.add('hide'); $('#sheet2').dataset.mode = ''; }
       if (v === 'export') exportGN();
       if (v === 'import') $('#gnfile').click();
+      if (v === 'ink') { $('#dlg2').classList.add('hide'); readInk(); }
       return;
     }
     if ((v = b.getAttribute('data-gr'))) {
@@ -4956,7 +5035,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     var sig = P.rec.id + ':' + k + '/' + n + ':' + hpos + ':' + (P.rec.updated || 0);
     if (progress.sig === sig) return;
     progress.sig = sig;
-    updElBtn();
+    updElBtn(); updInkBtn();
     $('#prog').innerHTML = '<span>確認 <b>' + k + '</b> / ' + n + '</span><span class="bar"><i style="width:' + (n ? Math.round(k / n * 100) : 0) + '%"></i></span>';
   }
 
@@ -5280,6 +5359,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     var gl = genList(), g0 = gl.filter(function (g) { return !((P.rec.edits.gen || {})[g.uid] || []).length; }).length;
     return { todo: todo, all: L.length, genTodo: g0, gen: gl.length };
   }
+  function updInkBtn() { var n = inkCount(), el = $('#inkcnt'); el.textContent = n; el.classList.toggle('hide', !n); }
   function updElBtn() {
     var b = $('#elbtn');
     if (!P || P.rec.blank && !P.rec.pack && !P.flags.length) { b.classList.add('hide'); return; }
