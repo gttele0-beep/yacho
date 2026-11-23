@@ -211,6 +211,10 @@ input:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0
 #hwbar .hwr button{min-width:42px;min-height:42px;font-weight:700;font-size:17px;padding:4px 8px}
 #hwbar .hwr button.on{background:var(--acc-d);color:#fff;border-color:var(--acc-d)}
 #hwbar .hwr button.pri,#hwbar .hwr button.ghost{font-size:14px;font-weight:600}
+#hwbar .hwph{margin-top:8px;padding-top:8px;border-top:1px solid rgba(0,0,0,.08)}
+#hwbar .hwph .ids{font-size:13px;color:var(--acc-d);font-weight:600}
+#hwbar .hwr button.rep,#pop .grades button.rep{color:var(--blue);font-size:14px}
+#hwbar .hwr button.rep.on,#pop .grades button.rep.on{background:var(--blue);color:#fff;border-color:var(--blue)}
 #hwbar .hwch{font-size:17px;font-weight:700;padding:0 4px}
 .hwpad{position:relative;height:118px;border:2px dashed #bcd3ee;border-radius:14px;background:#fbfdff;margin-top:4px;touch-action:none}
 .hwpad.big{height:150px;flex:1}
@@ -348,6 +352,7 @@ input:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0
       <label>指でも線を描く(Apple Pencilがないとき)<span class="sw"><input type="checkbox" id="s_finger"><span></span></span></label>
       <label>手書きの字を覚えさせる(はじめに1回・1分くらい。読み取りがよく当たるようになります)<button id="s_hwtrain" class="pri" style="min-height:36px">覚えさせる</button></label>
       <label>(お試し)黒ペンで図面の旗揚げの横に書いた字も読み取る<span class="sw"><input type="checkbox" id="s_hw"><span></span></span></label>
+      <label>旗揚げの横に手書きしたら、次の写真番号も自動で付ける(撮ってから書く人向け)<span class="sw"><input type="checkbox" id="s_hwph"><span></span></span></label>
       <label>手書きで覚えた字を消す<button id="s_hwreset" class="ghost" style="min-height:36px">消す</button></label>
     </div>
   </div>
@@ -3720,6 +3725,8 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   $('#s_hw').checked = !!SET.hwAuto;
   $('#s_hwtrain').onclick = function () { openTrain(); };
   $('#s_hw').onchange = function () { SET.hwAuto = this.checked; saveSet(); };
+  $('#s_hwph').checked = !!SET.hwPhoto;
+  $('#s_hwph').onchange = function () { SET.hwPhoto = this.checked; saveSet(); };
   $('#s_hwreset').onclick = function () { if (confirm('覚えた字(' + HW.count() + '個)を消して、はじめの状態に戻します。よろしいですか?')) { HW.reset(); toast('覚えた字を消しました'); } };
 
   function download(blob, name) {
@@ -3805,6 +3812,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     rec.edits.non = rec.edits.non || {}; rec.edits.gen = rec.edits.gen || {}; EL.span = null; EL.fig = 0;
     rec.edits.notes = rec.edits.notes || []; rec.edits.stamps = rec.edits.stamps || []; rec.edits.legends = rec.edits.legends || [];
     P = { aframes: fr0, labs: pr.labs, tok: pr.tok, rec: rec, dxf: dxf, frames: frames, fi: 0, tiles: {}, hi: null, flags: pr.flags, hMed: pr.hMed, newLayer: pr.newLayer };
+    clearTimeout(lzT); lzPend = false;
     hist = [JSON.stringify(rec.edits)]; hpos = 0; omSig = ''; applyOmoves(true);
     $('#home').classList.add('hide'); $('#work').classList.remove('hide');
     $('#wname').textContent = rec.name;
@@ -4462,13 +4470,18 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     });
     P.tiles = {}; P.hi = null; ovSig = null;
   }
-  function commit() {
+  var lzT = null, lzPend = false;
+  function lazyCommit() { lzPend = true; $('#undobtn').disabled = false; clearTimeout(lzT); lzT = setTimeout(flushLazy, 700); }
+  function flushLazy() { if (!lzPend) return; clearTimeout(lzT); lzPend = false; if (P) commit(true); }
+  function commit(quiet) {
+    clearTimeout(lzT); lzPend = false;
     var j = JSON.stringify(P.rec.edits);
     if (j === hist[hpos]) return;
     hist = hist.slice(0, hpos + 1); hist.push(j);
     if (hist.length > 80) hist.shift();
     hpos = hist.length - 1;
-    applyOmoves(); updUndo(); draw(); updateColors();
+    applyOmoves(); updUndo();
+    if (!quiet) { draw(); updateColors(); } else progress();
     clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 1500);
   }
   function saveNow() {
@@ -4481,8 +4494,8 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden' && saveTimer) saveNow(); });
   window.addEventListener('pagehide', function () { if (saveTimer) saveNow(); });
   function updUndo() { $('#undobtn').disabled = hpos <= 0; $('#redobtn').disabled = hpos >= hist.length - 1; }
-  function undo() { if (hpos > 0) { hidePop(); SEL = null; popS = false; hpos--; P.rec.edits = JSON.parse(hist[hpos]); applyOmoves(); updUndo(); draw(); updateColors(); saveNow(); } }
-  function redo() { if (hpos < hist.length - 1) { hidePop(); SEL = null; popS = false; hpos++; P.rec.edits = JSON.parse(hist[hpos]); applyOmoves(); updUndo(); draw(); updateColors(); saveNow(); } }
+  function undo() { flushLazy(); if (hpos > 0) { hidePop(); SEL = null; popS = false; hpos--; P.rec.edits = JSON.parse(hist[hpos]); applyOmoves(); updUndo(); draw(); updateColors(); saveNow(); } }
+  function redo() { flushLazy(); if (hpos < hist.length - 1) { hidePop(); SEL = null; popS = false; hpos++; P.rec.edits = JSON.parse(hist[hpos]); applyOmoves(); updUndo(); draw(); updateColors(); saveNow(); } }
   $('#undobtn').onclick = undo;
   $('#redobtn').onclick = redo;
 
@@ -4555,7 +4568,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       return;
     }
     // ペン・マウス
-    if (e.pointerType === 'pen') penActive = true;
+    if (e.pointerType === 'pen') { penActive = true; if (lzPend) { clearTimeout(lzT); lzT = setTimeout(flushLazy, 900); } }
     if (G && G.type === 'pinch') return;
     if (tool === 'lasso') { lassoDown(p, e.pointerId); return; }
     if (tool === 'stamp') { hidePop(); G = { type: 'stamp', id: e.pointerId, start: p, cur: p, t0: Date.now(), moved: 0 }; return; }
@@ -4677,7 +4690,9 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       var st = { c: curC(), w: Math.round(curW() / V.s * 1000) / 1000, pts: sm.pts.map(function (v) { return Math.round(v * 1000) / 1000; }) };
       if (!g.straight && !isHl(st.c)) st.p = sm.pr.map(function (v) { return Math.round(v * 100) / 100; });
       P.rec.edits.strokes.push(st);
-      commit();
+      // ペンを離したときは、書いた線だけを描き足す(全部描き直さない → 次の画にすぐ移れる)。記録は少しあとでまとめて
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); drawStroke(ctx, st.pts, st.p, st.c, st.w);
+      lazyCommit();
       if (st.c === 'k' && tool === 'pen') hwQueue(st);
       return;
     }
@@ -4826,7 +4841,8 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     items.forEach(function (it) {
       var nm = it.l.t.replace(/[-－]\s*[a-eａ-ｅ](\s*→\s*[a-eａ-ｅ])?.*$/, '');
       h += '<div class="it"><div class="nm">' + esc(nm) + (it.g.prev ? ' <span class="small">前回 <b>' + it.g.prev + '</b></span>' : '') + '</div><div class="grades">' +
-        ['a', 'b', 'c', 'd', 'e'].map(function (x) { return '<button data-pg="' + it.i + ':' + x + '" class="' + (it.g.now === x ? 'on' : '') + '">' + x + '</button>'; }).join('') + '</div></div>';
+        ['a', 'b', 'c', 'd', 'e'].map(function (x) { return '<button data-pg="' + it.i + ':' + x + '" class="' + (it.g.now === x ? 'on' : '') + '">' + x + '</button>'; }).join('') +
+        '<button data-prep="' + it.i + '" class="rep' + (it.l.c === 'b' ? ' on' : '') + '" title="補修した損傷は青くなります">補修</button></div></div>';
     });
     if (!items.length) h += '<div class="small" style="margin:4px">程度のある行がありません(「詳しく」で直せます)</div>';
     // 4. 損傷を足す
@@ -4906,6 +4922,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       openViewer(lst, +v, function (id) { var c3 = curOf(f); c3.ids.push(id); c3.ok = true; putFlag(f, c3); if (popF === f) showPop(f); });
       return;
     }
+    if ((v = b.getAttribute('data-prep'))) { setRepair(cur.lines, +v, cur.lines[+v].c !== 'b'); cur.ok = true; putFlag(f, cur); showPop(f); return; }
     if ((v = b.getAttribute('data-pg'))) { var q = v.split(':'); setGrade(cur.lines[+q[0]], q[1]); recolor(cur.lines); cur.ok = true; putFlag(f, cur); showPop(f); return; }
     if (a === 'same') {
       cur.lines.forEach(function (l) { var g = gradeOf(l); if (g && !g.now && g.prev) setGrade(l, g.prev); });
@@ -6216,6 +6233,16 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
 
   // ---------------- 線の色を、程度に合わせる(前回と同じ=黒、進んだ・新しい=赤) ----------------
   var GORD = { a: 1, b: 2, c: 3, d: 4, e: 5 };
+  // 補修:その損傷の行(と下の大きさの行)を青に。もう一度押すと元の色(赤・黒)に戻す
+  function setRepair(lines, i, on) {
+    var l = lines[i]; if (!l) return;
+    for (var k = i; k < lines.length; k++) {
+      var q = lines[k];
+      if (k > i && (gradeOf(q) || /^\s*写真/.test(q.t) || /^[①-⑳㉑-㉟]/.test(q.t))) break;
+      if (on) { q.c = 'b'; delete q.rf; } else if (q.c === 'b') q.c = 'k';
+    }
+    recolor(lines);
+  }
   function recolor(lines) {
     var anyRed = false, curC = null;
     lines.forEach(function (l, i) {
@@ -6452,6 +6479,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   }
   function hwTry() {
     if (!P || !P.hwPend || !P.hwPend.length) return;
+    flushLazy();
     var pend = P.hwPend.filter(function (s) { return P.rec.edits.strokes.indexOf(s) >= 0; }); P.hwPend = [];
     if (!pend.length) return;
     var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -6481,6 +6509,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       recolor(cur.lines); made = add.map(function (x) { return x.t; }).join(' / ');
     }
     cur.ok = true;
+    if (SET.hwPhoto && !o.redo && !cur.ids.length) { cur.ids.push(takeId()); made += '(写真 ' + cur.ids[cur.ids.length - 1] + ')'; }
     putFlag(f, cur);
     HWC = o; HWC.made = made; HWC.at = hpos;
     showHwBar();
@@ -6490,11 +6519,19 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     var el = hwBarEl(), o = HWC;
     if (!o) { el.classList.add('hide'); return; }
     var h = '<div class="hwt">' + SVG('pen') + '<b>' + esc(o.made) + '</b> にしました</div><div class="hwr">';
-    if (o.mode === 'grade') h += '<span class="small">違ったら:</span>' + ['a', 'b', 'c', 'd', 'e'].map(function (x) { return '<button data-hg="' + x + '" class="' + (o.res.text === x ? 'on' : '') + '">' + x + '</button>'; }).join('');
+    if (o.mode === 'grade') {
+      var lnow = (curOf(o.f).lines[o.li] || {});
+      h += '<span class="small">違ったら:</span>' + ['a', 'b', 'c', 'd', 'e'].map(function (x) { return '<button data-hg="' + x + '" class="' + (o.res.text === x ? 'on' : '') + '">' + x + '</button>'; }).join('') +
+        '<button data-hrep="1" class="rep' + (lnow.c === 'b' ? ' on' : '') + '">補修</button>';
+    }
     else h += '<span class="small">読み取り:</span>' + o.res.chars.map(function (c, k) { return c.c && c.c.length > 1 ? '<button data-hc="' + k + '" title="押すたびに次の候補">' + esc(c.ch) + '</button>' : '<span class="hwch">' + esc(c.ch === ' ' ? '␣' : c.ch) + '</span>'; }).join('') + '<span class="small">(字を押すと次の候補)</span>';
     h += '<button data-hx="1" class="ghost">メモの線に戻す</button><button data-hok="1" class="pri">OK</button></div>';
+    // 写真番号もここで付けられる(旗揚げを開かなくていい)
+    var ids = curOf(o.f).ids;
+    h += '<div class="hwr hwph"><button data-hph="1" class="pri">' + SVG('cam') + '撮った ' + esc(nextPhotoId()) + '</button>' +
+      (ids.length ? '<span class="ids">' + esc(ids.join(', ')) + '</span><button data-hunph="1" class="ghost">最後の1枚を外す</button>' : '<span class="small">写真を撮ったら押す</span>') + '</div>';
     el.innerHTML = h; el.classList.remove('hide');
-    clearTimeout(showHwBar.tm); showHwBar.tm = setTimeout(function () { if (HWC === o) { HWC = null; el.classList.add('hide'); } }, 12000);
+    clearTimeout(showHwBar.tm); showHwBar.tm = setTimeout(function () { if (HWC === o) { HWC = null; el.classList.add('hide'); } }, 20000);
   }
   function normStk(stks) {   // 覚えるときは 0〜100 の箱に
     var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -6506,23 +6543,43 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     var b = e.target.closest('button'); if (!b || !HWC) return;
     var o = HWC, v;
     if (b.getAttribute('data-hok')) { HWC = null; hwBarEl().classList.add('hide'); return; }
+    if (b.getAttribute('data-hph') || b.getAttribute('data-hunph') || b.getAttribute('data-hrep')) {
+      var cu = curOf(o.f);
+      if (b.getAttribute('data-hph')) cu.ids.push(takeId());
+      else if (b.getAttribute('data-hunph')) cu.ids.pop();
+      else setRepair(cu.lines, o.li, (cu.lines[o.li] || {}).c !== 'b');
+      cu.ok = true; putFlag(o.f, cu); o.nExtra = (o.nExtra || 0) + 1; showHwBar(); return;
+    }
+    var keep = hwPre(o);
     if (b.getAttribute('data-hx')) { HWC = null; hwBarEl().classList.add('hide'); undo(); toast('メモの線に戻しました', 1500); return; }
     if ((v = b.getAttribute('data-hg'))) {
       var segL = o.res.chars.filter(function (c) { return c.ch !== '→'; })[0];
       if (segL && v !== o.res.text) HW.learn(v, normStk(segL.seg.stks));
-      undo(); o.res.text = v; if (segL) segL.ch = v;
+      undo(); o.res.text = v; if (segL) segL.ch = v; o.redo = true;
       o.strokes = o.strokes.map(function (s) { return P.rec.edits.strokes.filter(function (x) { return JSON.stringify(x.pts) === JSON.stringify(s.pts); })[0] || s; });
-      hwApply(o); return;
+      hwApply(o); hwPost(o, keep); return;
     }
     if ((v = b.getAttribute('data-hc')) != null && v !== '') {
       var c = o.res.chars[+v], i = c.c.findIndex(function (x) { return x.ch === c.ch; });
       c.ch = c.c[(i + 1) % Math.min(c.c.length, 5)].ch;
       HW.learn(c.ch, normStk(c.seg.stks));
       o.res.text = o.res.chars.map(function (x) { return x.ch; }).join('').replace(/\s+/g, ' ').trim();
-      undo();
+      undo(); o.redo = true;
       o.strokes = o.strokes.map(function (s) { return P.rec.edits.strokes.filter(function (x) { return JSON.stringify(x.pts) === JSON.stringify(s.pts); })[0] || s; });
-      hwApply(o);
+      hwApply(o); hwPost(o, keep);
     }
+  }
+  // 読み取りを直すとき:あとから付けた写真番号・補修はいったん外して、直したあとに付け直す
+  function hwPre(o) {
+    var cu = curOf(o.f), keep = { ids: cu.ids.slice(), rep: o.mode === 'grade' && (cu.lines[o.li] || {}).c === 'b' };
+    for (var n = o.nExtra || 0; n > 0; n--) undo();
+    o.nExtra = 0;
+    return keep;
+  }
+  function hwPost(o, keep) {
+    if (!keep.ids.length && !keep.rep) return;
+    var cu = curOf(o.f); cu.ids = keep.ids; if (keep.rep) setRepair(cu.lines, o.li, true);
+    cu.ok = true; putFlag(o.f, cu); o.nExtra = 1; showHwBar();
   }
 
   // ---------------- 手書きの欄(ここに書くと読み取る) ----------------
@@ -6732,7 +6789,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     });
     return DOUT.exportDrawing(rec.buf, { flags: flags, tokkiEnts: [] }, new Map(), { visTexts: [], textEdits: textEdits, extraEnts: extra, newLayers: newLayers, entMoves: entMoves });
   }
-  window.__yacho = { gnr: function () { return GNR; }, gr: function () { return GR; }, hwSegment: hwSegment, hwRead: function (s, m) { return hwRead(s, m); }, HW: HW, exportRec: exportRec, prepare: prepare, state: function () { return P; }, view: V, SET: SET };
+  window.__yacho = { hwApply: function (o) { return hwApply(o); }, hwTarget: function (x, y) { return hwTarget(x, y); }, gnr: function () { return GNR; }, gr: function () { return GR; }, hwSegment: hwSegment, hwRead: function (s, m) { return hwRead(s, m); }, HW: HW, exportRec: exportRec, prepare: prepare, state: function () { return P; }, view: V, SET: SET };
 
   drawHome();
   if (navigator.storage && navigator.storage.persist) { try { navigator.storage.persist(); } catch (e) { /* なし */ } }
