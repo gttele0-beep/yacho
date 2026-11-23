@@ -1,6 +1,6 @@
 // 野帳:電波のない現場でも開けるように、アプリ本体をiPadに保存しておく
 // 開くときはiPadに保存してあるものをすぐ使う(電波を待たない)。新しい版は裏で取ってきて、次に更新したときに切り替わる
-const VER = '20261123235257';
+const VER = '20261124065456';
 const CACHE = 'yacho-' + VER;
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png', './icon-512-mask.png'];
 self.addEventListener('install', (e) => {
