@@ -139,7 +139,23 @@ input,textarea,select,[contenteditable]{-webkit-user-select:text;user-select:tex
 .seg{display:flex;background:#eceeeb;border-radius:12px;padding:3px;gap:2px}
 .seg button{border:0;background:transparent;min-height:36px;border-radius:9px;font-size:14px;color:var(--sub)}
 .seg button.on{background:#fff;color:var(--ink);font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,.12)}
-#elclose{margin-left:auto}
+#elclose{margin-left:0}
+#eldock{margin-left:auto}
+/* 図面の右に出しておく(図面を見ながら写真を撮る) */
+body.dock #elpanel{left:auto;width:var(--dockW,380px);top:var(--dockTop,110px);z-index:25;border-left:1px solid var(--line);box-shadow:-4px 0 14px rgba(0,0,0,.06)}
+body.dock #stage{right:var(--dockW,380px)}
+body.dock .elhead{padding:6px 8px;gap:6px}
+body.dock .elhead .seg button{padding:4px 8px;font-size:13px}
+body.dock #elsum{width:100%;order:9}
+body.dock .elbody{flex-direction:column}
+body.dock #elfig{border-left:0;border-top:1px solid var(--line);flex:0 0 40%}
+body.dock #ellist{padding:8px 8px 30px}
+body.dock .gi .th{width:88px;height:66px}
+body.dock .gi{gap:8px;padding:8px}
+.ppv{display:flex;flex-direction:column;gap:10px}
+.ppv .ph{width:100%;aspect-ratio:4/3;background:#ccc center/cover no-repeat;border-radius:12px;border:0;padding:0}
+.ppv .cap{font-size:13px;color:var(--ink2);margin:-4px 2px 4px}
+.ppv .hd{font-weight:700;font-size:15px;margin:2px}
 .elbody{flex:1;display:flex;min-height:0}
 #ellist{flex:1 1 52%;overflow:auto;padding:12px 14px 40px;-webkit-overflow-scrolling:touch}
 #elfig{flex:1 1 48%;display:flex;flex-direction:column;border-left:1px solid var(--line);background:#dfe3de;min-width:0}
@@ -403,9 +419,10 @@ input,textarea,select,[contenteditable]{-webkit-user-select:text;user-select:tex
 
 <div id="elpanel" class="hide">
   <div class="elhead">
-    <div class="seg" id="eltabs"><button data-et="el" class="on">要素チェック</button><button data-et="gen">現地状況写真</button></div>
+    <div class="seg" id="eltabs"><button data-et="el" class="on">要素チェック</button><button data-et="gen">現地状況写真</button><button data-et="pp">前回写真</button></div>
     <select id="elspan" class="hide"></select>
     <span id="elsum" class="small"></span>
+    <button id="eldock" class="ghost"><svg class="i"><use href="#i-copy"/></svg><span>図面の右に出す</span></button>
     <button id="elclose" class="pri">図面に戻る</button>
   </div>
   <div class="elbody"><div id="ellist"></div><div id="elfig"><div class="figbar"><select id="figsel"></select><span class="sp"></span><button data-z="-1">－</button><button data-z="0">幅に合わせる</button><button data-z="1">＋</button></div><div id="figwrap"><img id="figimg" alt=""></div></div></div>
@@ -4987,6 +5004,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   }
   function showPop(f) {
     popN = null; popF = f; P.sel = f; draw();
+    if (EL.tab === 'pp' && !$('#elpanel').classList.contains('hide')) { EL.ppFlag = f; drawPPList(); } else EL.ppFlag = f;
     var cur = curOf(f), items = [];
     cur.lines.forEach(function (l, i) { var g = gradeOf(l); if (g) items.push({ i: i, l: l, g: g }); });
     var h = '<div class="ph">' + (cur.ok ? '<span style="color:var(--acc);display:flex">' + SVG('check') + '</span>' : '') + esc(cur.lines[0] ? cur.lines[0].t : '') + '<button class="x" data-p="close">✕</button></div>';
@@ -5476,7 +5494,22 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     $('#elcnt').classList.toggle('ok', !n);
   }
   $('#elbtn').onclick = function () { hidePop(); openEl(P.rec.pack ? 'el' : 'gen'); };
-  $('#elclose').onclick = function () { $('#elpanel').classList.add('hide'); updElBtn(); draw(); };
+  $('#elclose').onclick = function () { $('#elpanel').classList.add('hide'); setDock(false, true); updElBtn(); draw(); };
+  // 図面の右に出しておく/大きく開く
+  function setDock(on, keep) {
+    var was = document.body.classList.contains('dock');
+    document.body.classList.toggle('dock', !!on);
+    if (!keep) { SET.dock = !!on; saveSet(); }
+    if (on) {
+      var top = $('#wtop').getBoundingClientRect().bottom;
+      document.body.style.setProperty('--dockTop', Math.round(top) + 'px');
+      document.body.style.setProperty('--dockW', Math.round(Math.max(300, Math.min(420, window.innerWidth * 0.36))) + 'px');
+    }
+    $('#eldock').querySelector('span').textContent = on ? '大きく開く' : '図面の右に出す';
+    $('#elclose').textContent = on ? '閉じる' : '図面に戻る';
+    if (was !== !!on) setTimeout(resize, 30);
+  }
+  $('#eldock').onclick = function () { setDock(!document.body.classList.contains('dock')); if (EL.tab === 'el') drawFig(); };
   $('#eltabs').onclick = function (e) { var b = e.target.closest('[data-et]'); if (b) openEl(b.getAttribute('data-et')); };
   $('#elspan').onchange = function () { EL.span = this.value; drawElList(); drawFig(); };
   function openEl(tab) {
@@ -5492,14 +5525,17 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       sel.classList.remove('hide');
     } else sel.classList.add('hide');
     $('#elpanel').classList.remove('hide');
+    if (SET.dock && !document.body.classList.contains('dock')) setDock(true, true);
     var etEl = document.querySelector('#eltabs [data-et="el"]'); if (etEl) etEl.classList.toggle('hide', !P.rec.pack);
     $('#elfig').classList.toggle('hide', tab !== 'el' || !P.rec.pack || !(P.rec.pack.elemFigs || []).length);
+    $('#elspan').classList.toggle('hide', !ms || tab === 'pp');
     drawElList(); if (tab === 'el') drawFig();
   }
   var ORD = ['Mg', 'Cr', 'St', 'Ds', 'Lu', 'Ll', 'Vu', 'Vl', 'Cf', 'Lc', 'Sm', 'Sl', 'Ps', 'Ac', 'Pw', 'Pc', 'Pf', 'Fo', 'Bh', 'Bs', 'Bm', 'Bc', 'Rr', 'Ra', 'Rc', 'Fj', 'Sj', 'Gr', 'Rh', 'Ur', 'Im', 'Ew'];
   function drawElList() {
     var box = $('#ellist'), ms = multiSpan();
     if (EL.tab === 'gen') return drawGenList();
+    if (EL.tab === 'pp') return drawPPList();
     var L = elementState().filter(function (e) { return !ms || e.span === EL.span; });
     var by = {};
     L.forEach(function (e) { (by[e.sym] = by[e.sym] || []).push(e); });
@@ -5527,7 +5563,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       if (e.status === 'dmg' || e.status === 'nonf') {
         // 図面のその旗揚げへ
         var f = e.flags[0]; if (!f) { toast(e.tok ? '「特記なき損傷」に書いてある要素です' : 'NON-aが図面に書いてある要素です'); return; }
-        $('#elpanel').classList.add('hide');
+        if (!document.body.classList.contains('dock')) $('#elpanel').classList.add('hide');
         var fi = P.frames.findIndex(function (fr) { return !fr.all && f.x >= fr.x0 && f.x <= fr.x1 && f.y >= fr.y0 && f.y <= fr.y1; });
         if (fi >= 0 && fi !== P.fi) showFrame(fi);
         V.s = Math.max(V.s, 3 / (f.h || P.hMed) * 4);
@@ -5541,11 +5577,24 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       elementState().forEach(function (x) { if (x.sym === v && x.status === 'todo' && (!multiSpan() || x.span === EL.span)) ed.non[x.k] = 1; });
       commit(); drawElList(); refreshSpanSel(); return;
     }
+    if ((v = b.getAttribute('data-ppv')) && EL.ppList) { var pl = EL.ppList, ff = EL.ppFlag; openViewer(pl.map(function (p) { return { url: fileUrl(p.file), title: '前回の写真', cap: (p.dmg || '') + (p.grade ? '-' + p.grade : '') }; }), +v, function (id) { var cu = curOf(ff); cu.ids.push(id); cu.ok = true; putFlag(ff, cu); }); return; }
     if ((v = b.getAttribute('data-gid'))) { var nid = takeId(); addGenId(v, nid); return; }
     if ((v = b.getAttribute('data-grm'))) { var q = v.split('|'); var arr = ed.gen[q[0]] || []; arr.splice(+q[1], 1); if (!arr.length) delete ed.gen[q[0]]; commit(); drawGenList(); return; }
     if ((v = b.getAttribute('data-gprev'))) { var g = genOf(v); openViewer([{ url: fileUrl(g.prev), title: '前回の写真', cap: g.memo }], 0, function (id) { addGenId(g.uid, id); }); return; }
     if ((v = b.getAttribute('data-gcam'))) { var g2 = genOf(v); openCam(g2.prev ? fileUrl(g2.prev) : '', function (id) { addGenId(g2.uid, id); }); return; }
   });
+  // 前回写真:いま開いている(最後にタップした)旗揚げの、前回の損傷写真を大きく並べる
+  function drawPPList() {
+    var f = EL.ppFlag, box = $('#ellist');
+    if (!f) { $('#elsum').textContent = ''; box.innerHTML = '<div class="empty" style="grid-column:auto">図面の旗揚げをタップすると、その部材の前回の写真がここに出ます。</div>'; return; }
+    var pps = prevPhotosOf(f), hd = f.raw.split('\n')[0];
+    $('#elsum').textContent = pps.length ? '前回の写真 ' + pps.length + '枚' : '';
+    var h = '<div class="ppv"><div class="hd">' + esc(hd) + '</div>';
+    if (!pps.length) h += '<div class="small">この旗揚げには前回の写真がありません(調書作成システムで前回の写真を入れて「野帳アプリ用に書き出す」をすると出ます)。</div>';
+    pps.forEach(function (p, k) { h += '<button class="ph" data-ppv="' + k + '" style="background-image:url(' + fileUrl(p.file) + ')"></button><div class="cap">' + esc((p.dmg || '') + (p.grade ? '-' + p.grade : '') + (p.id ? '  ' + p.id : '')) + '</div>'; });
+    box.innerHTML = h + '</div>';
+    EL.ppList = pps;
+  }
   function refreshSpanSel() { if (multiSpan()) { var cur = EL.span; openEl(EL.tab); EL.span = cur; } }
   // 現地状況写真の一覧:調書作成システムから来た一覧(前回の写真つき)。なければ、よく撮る写真の一覧
   var GEN_STD = ['全景(起点側から)', '全景(終点側から)', '側面(上流側・左側)', '側面(下流側・右側)', '路面(起点側から)', '路面(終点側から)', '桁下(床版・主桁)', '下部工(起点側の橋台)', '下部工(終点側の橋台)', '支承部', '伸縮装置', '高欄・防護柵', '排水施設', '橋名板・銘板', '点検の状況(作業風景)'];
