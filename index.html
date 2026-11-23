@@ -165,6 +165,25 @@ body.dock .gi{gap:8px;padding:8px}
 .figbar select{min-height:36px;max-width:50%}
 #figwrap{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y}
 #figimg{display:block;width:100%;height:auto;background:#fff}
+#figbox{position:relative;width:100%}
+.figbar button{white-space:nowrap;flex:none}
+.figbar select{min-width:0;flex:1 1 auto}
+#figbox #figimg{width:100%}
+#figink{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+#figwrap.pen #figink{pointer-events:auto;touch-action:none}
+#figpen.on{background:var(--red);color:#fff;border-color:var(--red)}
+/* まとめてNON-a写真 */
+#ellist.sel .els{touch-action:none}
+.elc.pick{outline:3px solid var(--blue);outline-offset:1px;background:#e3edff !important}
+#elselbar{position:sticky;bottom:0;margin:10px -4px -30px;padding:10px;background:#fff;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center;flex-wrap:wrap;box-shadow:0 -4px 12px rgba(0,0,0,.06);z-index:2}
+#elselbar b{color:var(--blue)}
+.selhint{background:#eef4ff;border-radius:12px;padding:8px 10px;font-size:13px;margin-bottom:8px}
+/* 状況写真の手書きメモ */
+.gmemo{background:#fff;border-radius:16px;box-shadow:var(--sh1);padding:8px;margin-bottom:10px}
+.gmemo .gmh{display:flex;align-items:center;gap:6px;font-weight:700;font-size:14px;margin-bottom:6px}
+.gmemo .gmh .sp{flex:1}
+.gmemo .gmh button{min-height:34px;padding:2px 10px;font-size:13px}
+.gmemo canvas{display:block;width:100%;height:240px;background:repeating-linear-gradient(#fff 0 31px,#e8ece8 31px 32px);border-radius:10px;touch-action:none}
 .mg{background:#fff;border-radius:16px;box-shadow:var(--sh1);padding:10px 12px;margin-bottom:10px}
 .mg .mh{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-weight:700}
 .mg .mh .sym{background:var(--acc-l);color:var(--acc);border-radius:8px;padding:1px 8px;font-size:13px}
@@ -425,7 +444,7 @@ body.dock .gi{gap:8px;padding:8px}
     <button id="eldock" class="ghost"><svg class="i"><use href="#i-copy"/></svg><span>図面の右に出す</span></button>
     <button id="elclose" class="pri">図面に戻る</button>
   </div>
-  <div class="elbody"><div id="ellist"></div><div id="elfig"><div class="figbar"><select id="figsel"></select><span class="sp"></span><button data-z="-1">－</button><button data-z="0">幅に合わせる</button><button data-z="1">＋</button></div><div id="figwrap"><img id="figimg" alt=""></div></div></div>
+  <div class="elbody"><div id="ellist"></div><div id="elfig"><div class="figbar"><select id="figsel"></select><span class="sp"></span><button id="figpen" title="要素番号図に書き込む"><svg class="i"><use href="#i-pen"/></svg>書く</button><button id="figundo" class="hide" title="最後の1本を消す"><svg class="i"><use href="#i-undo"/></svg></button><button data-z="-1">－</button><button data-z="0">幅に合わせる</button><button data-z="1">＋</button></div><div id="figwrap"><div id="figbox"><img id="figimg" alt=""><canvas id="figink"></canvas></div></div></div></div>
 </div>
 <div id="pv" class="hide">
   <div class="pvtop"><b id="pvttl"></b><span class="sp"></span><button id="pvcam" class="pri"><svg class="i"><use href="#i-cam"/></svg>カメラで重ねる</button><button id="pvclose">閉じる</button></div>
@@ -5542,7 +5561,8 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     var syms = Object.keys(by).sort(function (a, b) { var x = ORD.indexOf(a), y = ORD.indexOf(b); return ((x < 0 ? 99 : x) - (y < 0 ? 99 : y)) || (a < b ? -1 : 1); });
     var todo = L.filter(function (e) { return e.status === 'todo'; }).length;
     $('#elsum').innerHTML = todo ? 'まだ見ていない要素 <b style="color:var(--red)">' + todo + '</b> / ' + L.length : '<b style="color:var(--acc)">全部の要素を確認しました</b>(' + L.length + ')';
-    var h = '<div class="legend2"><span><i style="background:#fdecea;border:1px solid #f3b8b3"></i>損傷あり(旗揚げ)</span><span><i style="background:var(--acc)"></i>NON-a(ここで確認)</span><span><i style="background:var(--acc-l)"></i>NON-a(図面に書いてある)</span><span><i style="border:2px dashed #c4cbc3"></i>まだ見ていない → タップでNON-a</span></div>';
+    var h = '<div class="selhint">' + (EL.selMode ? '<b>まとめて写真:</b>1枚の写真に写っている要素を、指でなぞるかタップで選んで、下の「撮った」を押す' : '<button data-selmode="1" class="pri" style="min-height:38px">' + SVG('cam') + 'まとめてNON-a写真(複数選ぶ)</button> <span class="small">1枚にまとめて写した要素を選んで、写真番号を付けます</span>') + '</div>';
+    h += '<div class="legend2"><span><i style="background:#fdecea;border:1px solid #f3b8b3"></i>損傷あり(旗揚げ)</span><span><i style="background:var(--acc)"></i>NON-a(ここで確認)</span><span><i style="background:var(--acc-l)"></i>NON-a(図面に書いてある)</span><span><i style="border:2px dashed #c4cbc3"></i>まだ見ていない → タップでNON-a</span></div>';
     if (!L.length) h += '<div class="empty" style="grid-column:auto">要素の一覧がありません。調書作成システムで前回の調書(システムデータ)を読み込んでから「野帳アプリ用に書き出す」をしてください。</div>';
     syms.forEach(function (s) {
       var es = by[s].sort(function (a, b) { return a.el < b.el ? -1 : 1; });
@@ -5550,14 +5570,62 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       h += '<div class="mg"><div class="mh"><span class="sym">' + esc(s) + '</span>' + esc(es[0].name || '') + '<span class="n">' + (es.length - t) + ' / ' + es.length + '</span>' + (t ? '<button data-allnon="' + esc(s) + '">残り ' + t + ' 個を全部NON-a</button>' : '') + '</div><div class="els">' +
         es.map(function (e) {
           var sub = { dmg: '損傷' + e.dmg, nonf: 'NON-a', non: 'NON-a', todo: '未' }[e.status];
-          return '<button class="elc ' + e.status + '" data-ek="' + esc(e.k) + '">' + esc(e.el) + '<small>' + sub + '</small></button>';
+          return '<button class="elc ' + e.status + (EL.sel && EL.sel[e.k] ? ' pick' : '') + '" data-ek="' + esc(e.k) + '">' + esc(e.el) + '<small>' + sub + '</small></button>';
         }).join('') + '</div></div>';
     });
+    if (EL.selMode) {
+      var ns = Object.keys(EL.sel || {}).length;
+      h += '<div id="elselbar"><span>選んだ <b>' + ns + '</b> 個</span><button class="pri" data-selshot="1"' + (ns ? '' : ' disabled') + '>' + SVG('cam') + '撮った ' + esc(nextPhotoId()) + '</button><button data-selclr="1">選び直す</button><button data-selmode="0" class="ghost">やめる</button></div>';
+    }
     box.innerHTML = h;
+    box.classList.toggle('sel', !!EL.selMode);
   }
+  // 選んだ要素に1枚の写真:部材ごとに NON-a の旗揚げ(「主桁Mg0101,0102」「NON-a」「写真-ID」)を作る
+  function shotSelected() {
+    var keys = Object.keys(EL.sel || {}); if (!keys.length) return;
+    var id = takeId(), ed = P.rec.edits, L = elementState(), by = {};
+    keys.forEach(function (k) { var e = L.filter(function (x) { return x.k === k; })[0]; if (!e) return; var g = e.span + '|' + e.sym; (by[g] = by[g] || { e: e, els: [] }).els.push(e.el); ed.non[k] = 1; });
+    var fr = (P.aframes || []).filter(function (f) { return /健全/.test(f.title || ''); })[0] || (P.frames[P.fi].all ? (P.aframes || [])[0] : P.frames[P.fi]) || P.frames[0];
+    var h = P.hMed, n0 = ed.adds.filter(function (a) { return a.nonph; }).length, lh = h * 1.667;
+    Object.keys(by).forEach(function (g, j) {
+      var o = by[g], els = o.els.sort();
+      var name = (o.e.name || memberName(o.e.sym) || '');
+      var n = n0 + j, perCol = Math.max(1, Math.floor((fr.y1 - fr.y0 - h * 6) / (lh * 4))), col = Math.floor(n / perCol), row = n % perCol;
+      var x = fr.x0 + h * 2 + col * h * 16, y = fr.y1 - h * 4 - row * lh * 4;
+      ed.adds.push({ uid: 'n' + Date.now().toString(36) + j, fi: P.fi, ax: x, ay: y, x: x, y: y, h: h, layer: P.newLayer, nonph: true,
+        lines: [{ t: name + o.e.sym + els.join(','), c: 'k' }, { t: 'NON-a', c: 'k' }, { t: '写真-', c: 'k' }], ids: [id] });
+    });
+    EL.sel = {};
+    commit(); drawElList(); refreshSpanSel();
+    toast('写真 ' + id + ' で NON-a の旗揚げを作りました(' + (/健全/.test(fr.title || '') ? '健全部の枠' : 'この枠の左上') + ')', 4000);
+  }
+  // なぞって選ぶ
+  (function () {
+    var drag = null;
+    $('#ellist').addEventListener('pointerdown', function (e) {
+      if (!EL.selMode) return; var b = e.target.closest('.elc'); if (!b) return;
+      var k = b.getAttribute('data-ek'); EL.sel = EL.sel || {};
+      drag = { on: !EL.sel[k], moved: false, seen: {} }; drag.seen[k] = 1;
+      if (drag.on) EL.sel[k] = 1; else delete EL.sel[k];
+      b.classList.toggle('pick', drag.on); e.preventDefault();
+    });
+    $('#ellist').addEventListener('pointermove', function (e) {
+      if (!drag) return; var el = document.elementFromPoint(e.clientX, e.clientY), b = el && el.closest && el.closest('.elc'); if (!b) return;
+      var k = b.getAttribute('data-ek'); if (drag.seen[k]) return; drag.seen[k] = 1; drag.moved = true;
+      if (b.classList.contains('dmg')) return;
+      if (drag.on) EL.sel[k] = 1; else delete EL.sel[k];
+      b.classList.toggle('pick', drag.on);
+    });
+    var end = function () { if (!drag) return; drag = null; EL.selSkip = Date.now(); drawElList(); };
+    window.addEventListener('pointerup', end); window.addEventListener('pointercancel', end);
+  })();
   $('#ellist').addEventListener('click', function (ev) {
     var b = ev.target.closest('button'); if (!b) return;
     var v, ed = P.rec.edits; ed.non = ed.non || {}; ed.gen = ed.gen || {};
+    if ((v = b.getAttribute('data-selmode')) != null) { EL.selMode = v === '1'; EL.sel = {}; drawElList(); return; }
+    if (b.getAttribute('data-selclr')) { EL.sel = {}; drawElList(); return; }
+    if (b.getAttribute('data-selshot')) { shotSelected(); return; }
+    if (EL.selMode && b.getAttribute('data-ek')) return;   // 選ぶのは pointerdown でやっている
     if ((v = b.getAttribute('data-ek'))) {
       var e = elementState().filter(function (x) { return x.k === v; })[0]; if (!e) return;
       if (e.status === 'dmg' || e.status === 'nonf') {
@@ -5578,6 +5646,8 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       commit(); drawElList(); refreshSpanSel(); return;
     }
     if ((v = b.getAttribute('data-ppv')) && EL.ppList) { var pl = EL.ppList, ff = EL.ppFlag; openViewer(pl.map(function (p) { return { url: fileUrl(p.file), title: '前回の写真', cap: (p.dmg || '') + (p.grade ? '-' + p.grade : '') }; }), +v, function (id) { var cu = curOf(ff); cu.ids.push(id); cu.ok = true; putFlag(ff, cu); }); return; }
+    if (b.getAttribute('data-gmundo')) { var gm = ed.genMemo || []; if (gm.length) { gm.pop(); commit(); INK.paint($('#gmcv'), gm); } return; }
+    if (b.getAttribute('data-gmclr')) { if ((ed.genMemo || []).length && confirm('手書きメモを全部消します。よろしいですか?')) { ed.genMemo = []; commit(); INK.paint($('#gmcv'), []); } return; }
     if ((v = b.getAttribute('data-gid'))) { var nid = takeId(); addGenId(v, nid); return; }
     if ((v = b.getAttribute('data-grm'))) { var q = v.split('|'); var arr = ed.gen[q[0]] || []; arr.splice(+q[1], 1); if (!arr.length) delete ed.gen[q[0]]; commit(); drawGenList(); return; }
     if ((v = b.getAttribute('data-gprev'))) { var g = genOf(v); openViewer([{ url: fileUrl(g.prev), title: '前回の写真', cap: g.memo }], 0, function (id) { addGenId(g.uid, id); }); return; }
@@ -5609,8 +5679,8 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     var gl = genList().filter(function (g) { return g.std || !multiSpan() || String(g.span) === String(EL.span) || !EL.span; }), ed = P.rec.edits.gen || {};
     var done = gl.filter(function (g) { return (ed[g.uid] || []).length; }).length;
     $('#elsum').innerHTML = '写真あり <b style="color:var(--acc)">' + done + '</b> / ' + gl.length;
-    var h = '';
-    if (!gl.length) h = '<div class="empty" style="grid-column:auto">現地状況写真の枠がありません。</div>';
+    var h = '<div class="gmemo"><div class="gmh">' + SVG('pen') + '手書きメモ(写真番号など)<span class="sp"></span><button data-gmundo="1">' + SVG('undo') + '</button><button data-gmclr="1">全部消す</button></div><canvas id="gmcv"></canvas></div>';
+    if (!gl.length) h += '<div class="empty" style="grid-column:auto">現地状況写真の枠がありません。</div>';
     if (gl.length && gl[0].std) h += '<div class="small" style="grid-column:1/-1;margin:2px 4px 6px">よく撮る現地状況写真の一覧です(調書作成システムから「野帳アプリ用に書き出す」で持ってくると、前回の写真つきの一覧になります)。撮ったら「撮った」を押すと、調書作成システムの現地状況写真に入ります。</div>';
     gl.forEach(function (g) {
       var ids = ed[g.uid] || [];
@@ -5621,7 +5691,51 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
         '<div class="acts"><button class="pri" data-gid="' + esc(g.uid) + '">' + SVG('cam') + '撮った ' + esc(nextPhotoId()) + '</button>' + '<button data-gcam="' + esc(g.uid) + '">' + SVG('img') + 'iPadで重ねて撮る</button></div></div></div>';
     });
     $('#ellist').innerHTML = h;
+    INK.attach($('#gmcv'), function () { var ed = P.rec.edits; return (ed.genMemo = ed.genMemo || []); }, false);
   }
+  // ---- 手書き(要素番号図への書き込み・メモ帳)。点は 0〜1 の割合で持つ(大きさが変わっても同じ場所) ----
+  var INK = (function () {
+    var cur = null;
+    function paint(c, list) {
+      var r = c.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+      c.width = Math.round(r.width * d); c.height = Math.round(r.height * d);
+      var g = c.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, r.width, r.height);
+      g.lineCap = 'round'; g.lineJoin = 'round';
+      list.forEach(function (s) { g.strokeStyle = s.c === 'k' ? '#222' : '#d32f2f'; g.lineWidth = s.w || 2.2; g.beginPath(); s.p.forEach(function (q, i) { var x = q[0] * r.width, y = q[1] * r.height; if (i) g.lineTo(x, y); else g.moveTo(x, y); }); g.stroke(); });
+    }
+    function attach(c, getList, onlyWhen) {
+      if (!c) return;
+      paint(c, getList());
+      c.onpointerdown = function (e) {
+        if (onlyWhen && !onlyWhen()) return;
+        if (e.pointerType === 'touch' && !SET.finger && penSeenInk) return;   // ペンを使う人は、指ではスクロール
+        if (e.pointerType === 'pen') penSeenInk = true;
+        e.preventDefault(); c.setPointerCapture(e.pointerId);
+        var r = c.getBoundingClientRect(); cur = { c: c, r: r, s: { c: 'r', w: 2.2, p: [[(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]] }, list: getList() };
+      };
+      c.onpointermove = function (e) {
+        if (!cur || cur.c !== c) return;
+        var r = cur.r, g = c.getContext('2d'), d = window.devicePixelRatio || 1, last = cur.s.p[cur.s.p.length - 1];
+        var q = [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; cur.s.p.push(q);
+        g.setTransform(d, 0, 0, d, 0, 0); g.strokeStyle = '#d32f2f'; g.lineWidth = 2.2; g.lineCap = 'round';
+        g.beginPath(); g.moveTo(last[0] * r.width, last[1] * r.height); g.lineTo(q[0] * r.width, q[1] * r.height); g.stroke();
+      };
+      c.onpointerup = c.onpointercancel = function () {
+        if (!cur || cur.c !== c) return;
+        if (cur.s.p.length > 1) { cur.list.push(cur.s); commit(); }
+        cur = null;
+      };
+    }
+    return { attach: attach, paint: paint };
+  })();
+  var penSeenInk = false;
+  // 要素番号図に書き込む:図ごとに edits.figInk[図の番号]
+  function figInkList() { var ed = P.rec.edits; ed.figInk = ed.figInk || {}; var k = String(EL.fig); return (ed.figInk[k] = ed.figInk[k] || []); }
+  function figInkOn() { return $('#figwrap').classList.contains('pen'); }
+  function paintFig() { var c = $('#figink'); if (c && P) INK.attach(c, figInkList, figInkOn); }
+  $('#figimg').addEventListener('load', paintFig);
+  $('#figpen').onclick = function () { var on = !figInkOn(); $('#figwrap').classList.toggle('pen', on); this.classList.toggle('on', on); $('#figundo').classList.toggle('hide', !on); };
+  $('#figundo').onclick = function () { var l = figInkList(); if (l.length) { l.pop(); commit(); paintFig(); } };
   // 要素番号図
   function figsFor() {
     var all = P.rec.pack.elemFigs || [], ms = multiSpan();
@@ -5635,20 +5749,20 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     sel.innerHTML = fs.map(function (f, i) { return '<option value="' + i + '"' + (i === EL.fig ? ' selected' : '') + '>要素番号図 ' + (i + 1) + (f.name ? '(' + esc(f.name) + ')' : '') + '</option>'; }).join('');
     sel.style.display = fs.length > 1 ? '' : 'none';
     $('#figimg').src = fileUrl(fs[EL.fig].file);
-    $('#figimg').style.width = (EL.zoom * 100) + '%';
+    $('#figbox').style.width = (EL.zoom * 100) + '%'; paintFig();
   }
   $('#figsel').onchange = function () { EL.fig = +this.value; drawFig(); };
   document.querySelector('.figbar').addEventListener('click', function (e) {
     var b = e.target.closest('[data-z]'); if (!b) return;
     var z = +b.getAttribute('data-z');
     EL.zoom = z === 0 ? 1 : Math.max(1, Math.min(6, EL.zoom * (z > 0 ? 1.5 : 1 / 1.5)));
-    $('#figimg').style.width = (EL.zoom * 100) + '%';
+    $('#figbox').style.width = (EL.zoom * 100) + '%'; paintFig();
   });
   (function () {   // 要素番号図を2本指で拡大
     var d0 = null, z0 = 1, w = $('#figwrap');
     w.addEventListener('touchstart', function (e) { if (e.touches.length === 2) { d0 = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); z0 = EL.zoom; } }, { passive: true });
-    w.addEventListener('touchmove', function (e) { if (d0 && e.touches.length === 2) { e.preventDefault(); var d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); EL.zoom = Math.max(1, Math.min(6, z0 * d / d0)); $('#figimg').style.width = (EL.zoom * 100) + '%'; } }, { passive: false });
-    w.addEventListener('touchend', function () { d0 = null; });
+    w.addEventListener('touchmove', function (e) { if (d0 && e.touches.length === 2) { e.preventDefault(); var d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); EL.zoom = Math.max(1, Math.min(6, z0 * d / d0)); $('#figbox').style.width = (EL.zoom * 100) + '%'; } }, { passive: false });
+    w.addEventListener('touchend', function () { if (d0) paintFig(); d0 = null; });
   })();
 
   // ---------------- 損傷を追加する画面(種類 → 程度 → 大きさ) ----------------
