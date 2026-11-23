@@ -81,7 +81,11 @@ input:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0
 #outbtn{min-height:40px;padding:6px 14px}
 #stage{position:absolute;inset:0;overflow:hidden;touch-action:none}
 #cv,#cv2{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-#cv{transform-origin:0 0;will-change:transform}
+#cv{transform-origin:0 0;will-change:transform;inset:auto}
+#cvbg{position:absolute;inset:0;overflow:hidden;pointer-events:none;background:#e9ece8}
+#cvbg canvas{will-change:transform}
+#cv3{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#stage{background:#e9ece8}
 input,textarea,select,[contenteditable]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 #stage{touch-action:none;-webkit-user-select:none;user-select:none}
 #upd{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:9999;background:#1f7a4d;color:#fff;border-radius:22px;padding:10px 16px;font-size:15px;box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;gap:10px;align-items:center}
@@ -435,6 +439,7 @@ body.dock .refd pre{font-size:10.5px}
       <label>次の写真の番号<input id="s_next" type="number" inputmode="numeric" style="width:110px;text-align:center"></label>
       <label>写真IDの日付(空欄=今日)<input id="s_date" placeholder="MMDD" style="width:110px;text-align:center" inputmode="numeric"></label>
       <label>指でも線を描く(Apple Pencilがないとき)<span class="sw"><input type="checkbox" id="s_finger"><span></span></span></label>
+      <label>ペン先の先読み(線が遅れて見えにくくなる)<span class="sw"><input type="checkbox" id="s_pred"><span></span></span></label>
       <label>手書きの字を覚えさせる(はじめに1回・1分くらい。読み取りがよく当たるようになります)<button id="s_hwtrain" class="pri" style="min-height:36px">覚えさせる</button></label>
       <label>(お試し)黒ペンで図面の旗揚げの横に書いた字も読み取る<span class="sw"><input type="checkbox" id="s_hw"><span></span></span></label>
       <label>旗揚げの横に手書きしたら、次の写真番号も自動で付ける(撮ってから書く人向け)<span class="sw"><input type="checkbox" id="s_hwph"><span></span></span></label>
@@ -3851,6 +3856,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   $('#s_next').oninput = function () { SET.next = Math.max(1, parseInt(this.value, 10) || 1); saveSet(); };
   $('#s_date').oninput = function () { SET.date = this.value.replace(/\D/g, '').slice(0, 4); saveSet(); };
   $('#s_finger').onchange = function () { SET.finger = this.checked; saveSet(); };
+  $('#s_pred').checked = !SET.noPredict; $('#s_pred').onchange = function () { SET.noPredict = !this.checked; saveSet(); };
   $('#s_hw').checked = !!SET.hwAuto;
   $('#s_hwtrain').onclick = function () { openTrain(); };
   $('#s_hw').onchange = function () { SET.hwAuto = this.checked; saveSet(); };
@@ -3962,11 +3968,20 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   $('#outbtn').onclick = function () { if (P) saveNow().then(function () { exportOne(P.rec); }); };
 
   // ---------------- 描画 ----------------
-  var cv = $('#cv'), ctx = cv.getContext('2d'), cv2 = $('#cv2'), ctx2 = cv2.getContext('2d'), dpr = 1, CW = 0, CH = 0;
+  var cv = $('#cv'), ctx = cv.getContext('2d'), cv2 = $('#cv2'), ctx2 = cv2.getContext('2d', { desynchronized: true }) || cv2.getContext('2d'), dpr = 1, CW = 0, CH = 0;
+  // 図面の絵は画面より少し広く描いておく(指で少し動かしただけなら、はしが欠けない)
+  var MG = 0;
+  // ペン先の「先読み」を描く薄い層(毎回消して描き直す)
+  var cv3 = document.createElement('canvas'); cv3.id = 'cv3'; cv2.parentNode.insertBefore(cv3, cv2.nextSibling); var ctx3 = cv3.getContext('2d');
+  // いちばん下の層:図面全体のあらい絵(動かしている間に出てくる所は、まずこれが見える)
+  var bgHost = document.createElement('div'); bgHost.id = 'cvbg'; cv.parentNode.insertBefore(bgHost, cv); var bgCur = null;
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 3);
-    CW = cv.clientWidth; CH = cv.clientHeight;
-    cv.width = cv2.width = Math.round(CW * dpr); cv.height = cv2.height = Math.round(CH * dpr);
+    CW = cv2.clientWidth; CH = cv2.clientHeight;
+    MG = Math.round(Math.min(CW, CH) * 0.2);
+    cv.style.left = cv.style.top = -MG + 'px'; cv.style.width = (CW + MG * 2) + 'px'; cv.style.height = (CH + MG * 2) + 'px';
+    cv.width = Math.round((CW + MG * 2) * dpr); cv.height = Math.round((CH + MG * 2) * dpr);
+    cv2.width = cv3.width = Math.round(CW * dpr); cv2.height = cv3.height = Math.round(CH * dpr);
     if (P) { P.hi = null; draw(); schedHi(); }
   }
   window.addEventListener('resize', function () { setTimeout(resize, 50); });
@@ -4434,6 +4449,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     clearTimeout(hiTimer);
     hiTimer = setTimeout(function () {
       if (!P) return;
+      if (INR || (G && /^(pan|pinch)$/.test(G.type)) || touches.size) { schedHi(); return; }
       var bt = baseTile(P.fi);
       if (V.s * dpr <= bt.m.s * 1.15) { if (P.hi) { P.hi = null; draw(); } return; }
       var r = { x0: wx(0), x1: wx(CW), y0: wy(CH), y1: wy(0) };
@@ -4530,30 +4546,81 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     G.li = Math.max(G.li, n - 1);
     g.lineWidth = W(n - 1); g.beginPath(); g.moveTo(G.lx, G.ly); g.lineTo(X(n - 1), Y(n - 1)); g.stroke();   // ペン先まで
   }
+  // ペン先の先読み:ペンが次に行きそうな所まで、うすく線をのばしておく(遅れが見えにくくなる)
+  var pdBox = null;
+  function clearPredict() { if (pdBox) { ctx3.setTransform(dpr, 0, 0, dpr, 0, 0); ctx3.clearRect(pdBox[0], pdBox[1], pdBox[2], pdBox[3]); pdBox = null; } }
+  function predictTip(e) {
+    clearPredict();
+    if (SET.noPredict || !G || G.type !== 'draw' || G.straight || isHl(curC())) return;
+    var tip = G.last, q = null;
+    var pe = e.getPredictedEvents ? e.getPredictedEvents() : null;
+    if (pe && pe.length) q = pt(pe[pe.length - 1]);
+    else {
+      var evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+      if (evs.length >= 2) {
+        var a = evs[Math.max(0, evs.length - 3)], b = evs[evs.length - 1], dt = b.timeStamp - a.timeStamp;
+        if (dt > 0 && dt < 60) { var pa = pt(a), pb = pt(b); q = { x: pb.x + (pb.x - pa.x) / dt * 14, y: pb.y + (pb.y - pa.y) / dt * 14 }; }
+      }
+    }
+    if (!q) return;
+    var dx = q.x - tip.x, dy = q.y - tip.y, L = Math.hypot(dx, dy);
+    if (L < 1.5) return;
+    if (L > 24) { dx *= 24 / L; dy *= 24 / L; }
+    var w = curW() * (0.55 + 0.9 * (G.pr[G.pr.length - 1] || 0.5));
+    ctx3.setTransform(dpr, 0, 0, dpr, 0, 0); ctx3.strokeStyle = COL[curC()] || COL.k; ctx3.lineCap = 'round'; ctx3.lineWidth = w;
+    ctx3.beginPath(); ctx3.moveTo(tip.x, tip.y); ctx3.lineTo(tip.x + dx, tip.y + dy); ctx3.stroke();
+    var m = w + 2; pdBox = [Math.min(tip.x, tip.x + dx) - m, Math.min(tip.y, tip.y + dy) - m, Math.abs(dx) + m * 2, Math.abs(dy) + m * 2];
+  }
   function drawLive() {
     ctx2.setTransform(dpr, 0, 0, dpr, 0, 0); ctx2.clearRect(0, 0, CW, CH);
     if (G && G.type === 'draw' && G.pts.length >= 2) drawStroke(ctx2, G.pts, G.straight ? null : G.pr, curC(), curW() / V.s);
   }
   // 指で動かしている間は、描いた絵をそのまま動かす(毎回描き直さない → 指にぴったりついてくる)
-  var XF = null, xfRaf = false, xfLast = 0;
+  // 動かしている間は描き直さない(重い描き直しで止まらない)。はみ出た所は下の層のあらい絵が見える。指を離したら描き直す
+  var XF = null, xfRaf = false;
   function reqXf() {
     if (xfRaf) return; xfRaf = true;
-    requestAnimationFrame(function () {
-      xfRaf = false;
-      if (!P) return;
-      if (!XF) { draw(); return; }
-      var k = V.s / XF.s, tx = (XF.ax - V.ax) * V.s, ty = (V.ay - XF.ay) * V.s;
-      // 見えていない所が大きく出てきたら、ときどき本当に描き直す
-      var gap = Math.max(Math.abs(tx), Math.abs(ty), CW * (1 - k), CH * (1 - k), Math.abs(tx + CW * k - CW), Math.abs(ty + CH * k - CH));
-      var now = Date.now();
-      if (gap > Math.min(CW, CH) * 0.3 && now - xfLast > 180) { xfLast = now; draw(); return; }
-      cv.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + k + ')';
-    });
+    requestAnimationFrame(function () { xfRaf = false; applyXf(); });
+  }
+  function applyXf() {
+    if (!P) return;
+    if (!XF) { draw(); return; }
+    var k = V.s / XF.s, tx = (XF.ax - V.ax) * V.s + MG - MG * k, ty = (V.ay - XF.ay) * V.s + MG - MG * k;
+    cv.style.transform = 'translate3d(' + tx + 'px,' + ty + 'px,0) scale(' + k + ')';
+    placeBg();
+  }
+  // 下の層(図面全体のあらい絵)を今の位置・大きさに合わせる
+  function placeBg() {
+    if (!P) return;
+    var t = baseTile(P.fi), m = t.m;
+    if (bgCur !== t.c) { bgHost.innerHTML = ''; t.c.style.cssText = 'position:absolute;left:0;top:0;transform-origin:0 0;width:' + t.c.width + 'px;height:' + t.c.height + 'px'; bgHost.appendChild(t.c); bgCur = t.c; }
+    var k = V.s / m.s;
+    t.c.style.transform = 'translate3d(' + (m.X0 - V.ax) * V.s + 'px,' + (V.ay - m.Y1) * V.s + 'px,0) scale(' + k + ')';
+  }
+  // 指で払ったら、すこし滑ってから止まる(慣性)
+  var INR = null;
+  function stopInertia(redraw) { if (!INR) return; INR = null; if (redraw) { draw(); schedHi(); } }
+  function startInertia(vx, vy) {
+    var sp = Math.hypot(vx, vy);
+    if (sp < 0.25) return false;
+    if (sp > 4) { vx *= 4 / sp; vy *= 4 / sp; }
+    var me = INR = { vx: vx, vy: vy, t: performance.now() };
+    var step = function (now) {
+      if (INR !== me || !P) return;
+      var dt = Math.min(40, now - me.t); me.t = now;
+      V.ax -= me.vx * dt / V.s; V.ay += me.vy * dt / V.s;
+      var f = Math.pow(0.94, dt / 16.7); me.vx *= f; me.vy *= f;
+      applyXf();
+      if (Math.hypot(me.vx, me.vy) < 0.03) { INR = null; draw(); schedHi(); return; }
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+    return true;
   }
   function draw() {
     if (!P) return;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = '#e9ece8'; ctx.fillRect(0, 0, CW, CH);
+    ctx.setTransform(dpr, 0, 0, dpr, MG * dpr, MG * dpr);
+    ctx.fillStyle = '#e9ece8'; ctx.fillRect(-MG, -MG, CW + MG * 2, CH + MG * 2);
     drawTile(baseTile(P.fi));
     if (P.hi) drawTile(P.hi);
     // 写真番号レイヤー:「XXXXXXXXXX」(まだ写真IDのない印)は出さず、本物の写真IDだけ小さく出す
@@ -4622,6 +4689,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     drawSel();
     if (!G || !/^(pan|pinch|drag|dragAdd)$/.test(G.type)) progress();
     XF = { s: V.s, ax: V.ax, ay: V.ay }; if (cv.style.transform) cv.style.transform = '';
+    placeBg();
     // 旗揚げを置くときの印
     if (P.pick && P.pick.ax != null) {
       ctx.fillStyle = '#d22c2c'; ctx.beginPath(); ctx.arc(sx(P.pick.ax), sy(P.pick.ay), 6, 0, 7); ctx.fill();
@@ -4746,7 +4814,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   function startPan(p, id) {
     var ha = hitAddPart(p);
     if (ha) { G = { type: 'dragAdd', id: id, a: ha.a, part: ha.part, last: p, start: p, t0: Date.now(), moved: 0 }; return; }
-    G = { type: 'pan', id: id, x0: p.x, y0: p.y, v0: Object.assign({}, V), t0: Date.now(), moved: 0 }; }
+    G = { type: 'pan', id: id, x0: p.x, y0: p.y, v0: Object.assign({}, V), t0: Date.now(), moved: 0, hist: [[performance.now(), p.x, p.y]] }; }
   function startPinch() {
     var a = Array.from(touches.values()).slice(0, 2);
     var d = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) || 1;
@@ -4775,6 +4843,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   cv2.addEventListener('pointerdown', function (e) {
     if (!P) return;
     e.preventDefault();
+    if (INR) stopInertia(e.pointerType === 'pen');
     try { cv2.setPointerCapture(e.pointerId); } catch (x) { /* なし */ }
     var p = pt(e);
     if (e.pointerType === 'touch') {
@@ -4837,6 +4906,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       G.moved = Math.max(G.moved, Math.hypot(p.x - G.x0, p.y - G.y0));
       if (G.moved > 6) hidePop();
       V.ax = G.v0.ax - (p.x - G.x0) / V.s; V.ay = G.v0.ay + (p.y - G.y0) / V.s;
+      if (G.hist) { G.hist.push([performance.now(), p.x, p.y]); if (G.hist.length > 8) G.hist.shift(); }
       reqXf(); return;
     }
     if (G.type === 'lasso' || G.type === 'drag') { lassoMove(p); return; }
@@ -4877,6 +4947,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       });
       if (any) armStraight();
       liveInc();
+      predictTip(e);
     } else if (G.type === 'erase') eraseAt(p);
   }, { passive: false });
   function endPointer(e) {
@@ -4905,9 +4976,13 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     var g = G; G = null; clearTimeout(stTimer);
     var isTap = (g.moved || 0) < 8 && Date.now() - g.t0 < 500;
     if (g.type === 'pan') {
-      if (isTap && e.type !== 'pointercancel') onTap(p);
-      else schedHi();
-      draw(); return;
+      if (isTap && e.type !== 'pointercancel') { onTap(p); draw(); return; }
+      // 最後の0.1秒の速さで滑らせる(止めてから離したときは滑らない)
+      var hs = g.hist || [], now = performance.now(), h0 = null;
+      for (var hi = hs.length - 1; hi >= 0; hi--) { if (now - hs[hi][0] > 100) break; h0 = hs[hi]; }
+      var hl = hs[hs.length - 1];
+      if (e.type !== 'pointercancel' && h0 && hl && hl !== h0 && now - hl[0] < 60 && startInertia((hl[1] - h0[1]) / (hl[0] - h0[0]), (hl[2] - h0[2]) / (hl[0] - h0[0]))) return;
+      draw(); schedHi(); return;
     }
     if (g.type === 'dragAdd') { if (g.moved > 6) commit(); else if (e.type !== 'pointercancel') onTap(p); return; }
     if (g.type === 'lasso' || g.type === 'drag') { if (e.type !== 'pointercancel') lassoUp(g, p); else ctx2.clearRect(0, 0, CW, CH); return; }
@@ -4923,14 +4998,14 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       return;
     }
     if (g.type === 'draw') {
-      drawLive();
+      clearPredict(); drawLive();
       if (isTap || g.pts.length < 4) { if (e.type !== 'pointercancel') onTap(p); return; }
       var sm = g.straight ? { pts: g.pts, pr: g.pr } : smooth(g.pts, g.pr);
       var st = { c: curC(), w: Math.round(curW() / V.s * 1000) / 1000, pts: sm.pts.map(function (v) { return Math.round(v * 1000) / 1000; }) };
       if (!g.straight && !isHl(st.c)) st.p = sm.pr.map(function (v) { return Math.round(v * 100) / 100; });
       P.rec.edits.strokes.push(st);
       // ペンを離したときは、書いた線だけを描き足す(全部描き直さない → 次の画にすぐ移れる)。記録は少しあとでまとめて
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); drawStroke(ctx, st.pts, st.p, st.c, st.w);
+      ctx.setTransform(dpr, 0, 0, dpr, MG * dpr, MG * dpr); drawStroke(ctx, st.pts, st.p, st.c, st.w);
       lazyCommit();
       if (st.c === 'k' && tool === 'pen') hwQueue(st);
       return;
