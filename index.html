@@ -4602,7 +4602,8 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   var touches = new Map();
   // 手のひら・手の側面:ペンを使っている間とその直後の指、接している面が大きい指は無視する
   var palms = new Set(), lastPen = 0;
-  function isPalm(e) { return (e.width || 0) >= 32 || (e.height || 0) >= 32; }
+  // 指の大きさはiPadだと40px前後で返ってくるので、手のひら扱いはかなり大きいときだけ。しかもペンで書いている最中(10秒以内)に限る
+  function isPalm(e) { return Date.now() - lastPen < 10000 && ((e.width || 0) >= 75 || (e.height || 0) >= 75); }
   // 画面の長押しで文字が選ばれる・虫めがねが出るのを止める(入力欄はそのまま)
   document.addEventListener('selectstart', function (e) { if (!(e.target.closest && e.target.closest('input,textarea,[contenteditable]'))) e.preventDefault(); });
   $('#stage').addEventListener('touchstart', function (e) { if (e.target === cv2) e.preventDefault(); }, { passive: false });
