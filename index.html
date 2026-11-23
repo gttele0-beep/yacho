@@ -188,6 +188,10 @@ body.dock .gi{gap:8px;padding:8px}
 .gmemo .gmh{display:flex;align-items:center;gap:6px;font-weight:700;font-size:14px;margin-bottom:6px}
 .gmemo .gmh .sp{flex:1}
 .gmemo .gmh button{min-height:34px;padding:2px 10px;font-size:13px}
+.gx .gxt{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
+.gx .gxt button{min-height:32px;padding:2px 10px;font-size:13px}
+.gx .gxt button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.gx .acts button{min-height:40px}
 .gmemo canvas{display:block;width:100%;height:240px;background:repeating-linear-gradient(#fff 0 31px,#e8ece8 31px 32px);border-radius:10px;touch-action:none}
 .mg{background:#fff;border-radius:16px;box-shadow:var(--sh1);padding:10px 12px;margin-bottom:10px}
 .mg .mh{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-weight:700}
@@ -5682,6 +5686,9 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       commit(); drawElList(); refreshSpanSel(); return;
     }
     if ((v = b.getAttribute('data-ppv')) && EL.ppList) { var pl = EL.ppList, ff = EL.ppFlag; openViewer(pl.map(function (p) { return { url: fileUrl(p.file), title: '前回の写真', cap: (p.dmg || '') + (p.grade ? '-' + p.grade : '') }; }), +v, function (id) { var cu = curOf(ff); cu.ids.push(id); cu.ok = true; putFlag(ff, cu); }); return; }
+    if ((v = b.getAttribute('data-gxt'))) { EL.gxTag = EL.gxTag === v ? '' : v; drawGenList(); return; }
+    if (b.getAttribute('data-gx')) { ed.genExtra = ed.genExtra || []; ed.genExtra.push({ id: takeId(), tag: EL.gxTag || '' }); commit(); drawGenList(); return; }
+    if ((v = b.getAttribute('data-gxrm')) != null) { (ed.genExtra || []).splice(+v, 1); commit(); drawGenList(); return; }
     if (b.getAttribute('data-gmundo')) { var gm = ed.genMemo || []; if (gm.length) { gm.pop(); commit(); INK.paint($('#gmcv'), gm); } return; }
     if (b.getAttribute('data-gmclr')) { if ((ed.genMemo || []).length && confirm('手書きメモを全部消します。よろしいですか?')) { ed.genMemo = []; commit(); INK.paint($('#gmcv'), []); } return; }
     if ((v = b.getAttribute('data-gid'))) { var nid = takeId(); addGenId(v, nid); return; }
@@ -5709,6 +5716,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     if (pk && pk.length) return pk;
     return GEN_STD.map(function (m, i) { return { uid: 'std' + (i + 1), memo: m, tag: '', span: '1', std: true }; }).concat((P.rec.genExtra || []));
   }
+  var GX_TAGS = ['全景', '側面', '路面', '桁下', '下部工', '支承', '伸縮装置', '排水', '高欄・防護柵', '橋名板', '点検状況'];
   function genOf(uid) { return genList().filter(function (g) { return g.uid === uid; })[0]; }
   function addGenId(uid, id) { var ed = P.rec.edits; ed.gen = ed.gen || {}; (ed.gen[uid] = ed.gen[uid] || []).push(id); commit(); if (EL.tab === 'gen' && !$('#elpanel').classList.contains('hide')) drawGenList(); }
   function drawGenList() {
@@ -5716,6 +5724,12 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     var done = gl.filter(function (g) { return (ed[g.uid] || []).length; }).length;
     $('#elsum').innerHTML = '写真あり <b style="color:var(--acc)">' + done + '</b> / ' + gl.length;
     var h = '<div class="gmemo"><div class="gmh">' + SVG('pen') + '手書きメモ(写真番号など)<span class="sp"></span><button data-gmundo="1">' + SVG('undo') + '</button><button data-gmclr="1">全部消す</button></div><canvas id="gmcv"></canvas></div>';
+    // 枠にない写真:押すだけで写真番号を記録(メモは書かなくていい。場所のタグは任意)
+    var gx = P.rec.edits.genExtra || [];
+    h += '<div class="gmemo gx"><div class="gmh">' + SVG('cam') + 'その他の写真(枠にない写真)<span class="sp"></span><span class="small">' + (gx.length ? gx.length + '枚' : '') + '</span></div>' +
+      '<div class="gxt">' + GX_TAGS.map(function (t) { return '<button data-gxt="' + esc(t) + '" class="' + (EL.gxTag === t ? 'on' : '') + '">' + esc(t) + '</button>'; }).join('') + '</div>' +
+      '<div class="acts"><button class="pri" data-gx="1">' + SVG('cam') + '撮った ' + esc(nextPhotoId()) + (EL.gxTag ? '(' + esc(EL.gxTag) + ')' : '') + '</button></div>' +
+      (gx.length ? '<div class="chips" style="margin-top:6px">' + gx.map(function (x, k) { return '<span class="chip">' + esc(x.id) + (x.tag ? ' ' + esc(x.tag) : '') + '<button data-gxrm="' + k + '">✕</button></span>'; }).join('') + '</div>' : '') + '</div>';
     if (!gl.length) h += '<div class="empty" style="grid-column:auto">現地状況写真の枠がありません。</div>';
     if (gl.length && gl[0].std) h += '<div class="small" style="grid-column:1/-1;margin:2px 4px 6px">よく撮る現地状況写真の一覧です(調書作成システムから「野帳アプリ用に書き出す」で持ってくると、前回の写真つきの一覧になります)。撮ったら「撮った」を押すと、調書作成システムの現地状況写真に入ります。</div>';
     gl.forEach(function (g) {
@@ -7182,6 +7196,8 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       if (!g && /^std\d+$/.test(u)) { info.push('G ' + u + ' ' + ids.join(',') + ' - ' + String(GEN_STD[+u.slice(3) - 1] || '').replace(/\s/g, '')); return; }
       info.push('G ' + u + ' ' + ids.join(',') + (g && g.idx != null ? ' ' + g.idx : ''));
     });
+    // 枠にない状況写真:1枚ずつ別の欄として渡す(メモは「タグ(写真ID)」)
+    (ed.genExtra || []).forEach(function (x, i) { info.push('G stdx' + (i + 1) + ' ' + x.id + ' - ' + ((x.tag || 'その他') + '(' + x.id + ')').replace(/\s/g, '')); });
     (rec.shots || []).forEach(function (x) { info.push('T ' + x.id + ' ' + Math.round(x.t / 1000)); });
     if (info.length > 1) {
       var fr0 = pr.A.frames[0] || { x0: 0, y0: 0 };
