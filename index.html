@@ -718,6 +718,8 @@ function parseDXF(text) {
     if (expectName && code === '2') { section = val.trim(); expectName = false; continue; }
     if (lay) { if (code === '2') lay.name = val.trim(); else if (code === '62') lay.color = Math.abs(parseInt(val, 10)); continue; }
     if (!cur) continue;
+    // MTEXT の埋め込みオブジェクト(101 の後ろ)は、高さ(40)などを上書きするので読まない
+    if (cur.type === 'MTEXT') { if (code === '101') { cur.emb = true; continue; } if (cur.emb) continue; }
     switch (code) {
       case '8': cur.layer = val.trim(); break;
       case '62': cur.color = parseInt(val, 10); break;
@@ -1702,6 +1704,8 @@ const DREND = (function () {
         else (cur.raw || (cur.raw = [])).push([+code, vt]);
         continue;
       }
+      // MTEXT の「埋め込みオブジェクト」(101 の後ろ):文字の高さ(40)や位置などを上書きしてしまうので読まない
+      if (cur.type === 'MTEXT') { if (code === '101') { cur.emb = true; continue; } if (cur.emb) continue; }
       switch (code) {
         case '8': cur.layer = vt; break;
         case '6': cur.lt = vt; break;
