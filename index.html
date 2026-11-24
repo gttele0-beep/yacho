@@ -381,6 +381,70 @@ body.dock .refd pre{font-size:10.5px}
 .foot{display:flex;gap:8px;justify-content:space-between;margin-top:16px;flex-wrap:wrap}
 .small{font-size:13px;color:var(--sub)}
 .warnbox{background:#fff6e6;border:1px solid #f6d79c;border-radius:12px;padding:9px 12px;font-size:14px;margin:8px 0}
+
+/* ================= モダン(遊び)の見た目 ================= */
+body.modern{--acc:#5b4cf5;--acc-d:#3a2bc9;--acc-l:#eceaff;--grad:linear-gradient(135deg,#6d5bff 0%,#8f4dff 50%,#ff5fa2 120%);--glass:rgba(255,255,255,.62);--glassb:rgba(255,255,255,.75);--hair:rgba(255,255,255,.7);--ink:#14121f;--sub:#6c6a7c;--line:rgba(20,18,40,.08);
+  --sh1:0 1px 1px rgba(20,16,60,.04),0 8px 24px rgba(40,30,120,.08);--sh2:0 2px 4px rgba(20,16,60,.06),0 24px 60px rgba(40,30,120,.22);
+  font-feature-settings:"palt";letter-spacing:.01em}
+body.modern button{border-radius:999px;border-color:rgba(20,18,40,.07);background:rgba(255,255,255,.8)}
+body.modern button.pri{background:var(--grad);border:0;box-shadow:0 6px 18px rgba(109,91,255,.38),inset 0 1px 0 rgba(255,255,255,.35)}
+body.modern button.ghost{background:transparent;border-color:transparent}
+body.modern input,body.modern select,body.modern textarea{border-radius:14px;border-color:rgba(20,18,40,.1)}
+body.modern .sw input:checked+span{background:var(--grad)}
+/* ホーム:暗い背景に色のにじみ */
+body.modern #home{background:#0c0a1d;color:#f3f1ff;min-height:100vh;
+  background-image:radial-gradient(900px 500px at 10% -10%,rgba(124,92,255,.55),transparent 60%),radial-gradient(700px 500px at 100% 0%,rgba(255,95,162,.35),transparent 60%),radial-gradient(800px 600px at 50% 110%,rgba(40,180,255,.25),transparent 60%);background-attachment:fixed}
+body.modern .hero{background:transparent;padding-bottom:40px}
+body.modern .hero h1{font-size:44px;font-weight:800;letter-spacing:-.02em;background:linear-gradient(90deg,#fff,#d9d2ff 60%,#ffc2dc);-webkit-background-clip:text;background-clip:text;color:transparent}
+body.modern .hero p{color:rgba(243,241,255,.7)}
+body.modern .logo{background:var(--grad);border-radius:20px;box-shadow:0 10px 30px rgba(143,77,255,.5),inset 0 1px 0 rgba(255,255,255,.4)}
+body.modern .wrap{margin-top:0}
+body.modern .hbtns button:not(.pri){background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.14);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
+body.modern .hbtns2 button{color:rgba(243,241,255,.85)}
+body.modern .hbtns2 .small,body.modern #home .small{color:rgba(243,241,255,.55)}
+body.modern .pitem,body.modern .sets,body.modern .empty{background:rgba(255,255,255,.07);color:#f3f1ff;border:1px solid rgba(255,255,255,.12);border-radius:26px;box-shadow:0 20px 50px rgba(0,0,0,.35);-webkit-backdrop-filter:blur(24px) saturate(1.4);backdrop-filter:blur(24px) saturate(1.4)}
+body.modern .pitem:hover{border-color:rgba(255,255,255,.22)}
+body.modern .pitem .meta,body.modern .pstat{color:rgba(243,241,255,.6)}
+body.modern .pstat b{color:#c9bfff}
+body.modern .bar{background:rgba(255,255,255,.1)}
+body.modern .bar i{background:var(--grad);box-shadow:0 0 12px rgba(143,77,255,.7)}
+body.modern .tag{background:rgba(143,77,255,.22);color:#d8d0ff}
+body.modern .pitem .acts button:not(.pri),body.modern .sets button{background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.14)}
+body.modern .sets label{border-top-color:rgba(255,255,255,.08)}
+body.modern .sets input,body.modern .sets select{background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.16)}
+body.modern .sw span{background:rgba(255,255,255,.18)}
+/* 図面:浮いたガラスのバー */
+body.modern #work{background:#e9e8f0}
+body.modern #wtop{left:10px;right:10px;top:calc(8px + env(safe-area-inset-top));padding:8px 10px;border-radius:28px;background:var(--glass);-webkit-backdrop-filter:blur(28px) saturate(1.8);backdrop-filter:blur(28px) saturate(1.8);border:1px solid var(--hair);box-shadow:0 10px 40px rgba(40,30,120,.16),inset 0 1px 0 rgba(255,255,255,.8)}
+body.modern #tabs{background:rgba(20,18,40,.06);border-radius:999px}
+body.modern #tabs button{border-radius:999px}
+body.modern #tabs button.on{background:#fff;box-shadow:0 2px 8px rgba(40,30,120,.15)}
+body.modern #tools{padding:4px 2px 8px;margin-bottom:-6px}
+body.modern #tools button{border-radius:16px;color:#4a4760;transition:background .2s,color .2s,transform .12s}
+body.modern #tools .main button.on{background:var(--grad);color:#fff;box-shadow:0 6px 16px rgba(109,91,255,.45)}
+body.modern #tools .sep{background:rgba(20,18,40,.1)}
+body.modern #opts button.on .cdot{box-shadow:0 0 0 2px #fff,0 0 0 4px #7a5cff}
+body.modern #elbtn{background:rgba(255,255,255,.7)}
+body.modern #elbtn .cnt{background:linear-gradient(135deg,#ff5f6d,#ff2d86)}
+body.modern #elbtn .cnt.ok{background:var(--grad)}
+body.modern .prog b{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+body.modern #hint{background:rgba(20,16,50,.72);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.15);top:calc(132px + env(safe-area-inset-top))}
+body.modern #toast{background:rgba(20,16,50,.78);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:12px 22px}
+body.modern #pop{background:var(--glassb);-webkit-backdrop-filter:blur(30px) saturate(1.8);backdrop-filter:blur(30px) saturate(1.8);border:1px solid var(--hair);border-radius:30px}
+body.modern #pop .it{background:rgba(255,255,255,.65);border-radius:18px}
+body.modern #pop .ok{box-shadow:0 8px 22px rgba(109,91,255,.4)}
+body.modern .dlg{background:rgba(12,10,30,.35);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+body.modern .sheet{background:rgba(255,255,255,.86);-webkit-backdrop-filter:blur(30px) saturate(1.6);backdrop-filter:blur(30px) saturate(1.6);border:1px solid var(--hair);border-radius:32px 32px 0 0}
+@media (min-width:900px){body.modern .sheet{border-radius:32px}}
+body.modern #elpanel{background:#f2f1f8}
+body.modern .elhead{background:var(--glass);-webkit-backdrop-filter:blur(28px);backdrop-filter:blur(28px);border-bottom:1px solid var(--line)}
+body.modern .seg{background:rgba(20,18,40,.06);border-radius:999px}
+body.modern .seg button{border-radius:999px}
+body.modern .seg button.on{box-shadow:0 2px 8px rgba(40,30,120,.15)}
+body.modern .pdg,body.modern .refd{border-radius:22px}
+body.modern .refg button.on{background:var(--grad);border:0}
+body.modern #upd{background:var(--grad)}
+body.modern #upd button{color:#5b4cf5}
 </style>
 </head>
 <body>
@@ -440,6 +504,7 @@ body.dock .refd pre{font-size:10.5px}
       <label>写真IDの日付(空欄=今日)<input id="s_date" placeholder="MMDD" style="width:110px;text-align:center" inputmode="numeric"></label>
       <label>指でも線を描く(Apple Pencilがないとき)<span class="sw"><input type="checkbox" id="s_finger"><span></span></span></label>
       <label>ペン先の先読み(線が遅れて見えにくくなる)<span class="sw"><input type="checkbox" id="s_pred"><span></span></span></label>
+      <label>モダンな見た目(お遊び)<span class="sw"><input type="checkbox" id="s_modern"><span></span></span></label>
       <label>手書きの字を覚えさせる(はじめに1回・1分くらい。読み取りがよく当たるようになります)<button id="s_hwtrain" class="pri" style="min-height:36px">覚えさせる</button></label>
       <label>(お試し)黒ペンで図面の旗揚げの横に書いた字も読み取る<span class="sw"><input type="checkbox" id="s_hw"><span></span></span></label>
       <label>旗揚げの横に手書きしたら、次の写真番号も自動で付ける(撮ってから書く人向け)<span class="sw"><input type="checkbox" id="s_hwph"><span></span></span></label>
@@ -3856,6 +3921,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   $('#s_next').oninput = function () { SET.next = Math.max(1, parseInt(this.value, 10) || 1); saveSet(); };
   $('#s_date').oninput = function () { SET.date = this.value.replace(/\D/g, '').slice(0, 4); saveSet(); };
   $('#s_finger').onchange = function () { SET.finger = this.checked; saveSet(); };
+  document.body.classList.toggle('modern', !!SET.modern); $('#s_modern').checked = !!SET.modern; $('#s_modern').onchange = function () { SET.modern = this.checked; saveSet(); document.body.classList.toggle('modern', SET.modern); };
   $('#s_pred').checked = !SET.noPredict; $('#s_pred').onchange = function () { SET.noPredict = !this.checked; saveSet(); };
   $('#s_hw').checked = !!SET.hwAuto;
   $('#s_hwtrain').onclick = function () { openTrain(); };
