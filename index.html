@@ -445,6 +445,73 @@ body.modern .pdg,body.modern .refd{border-radius:22px}
 body.modern .refg button.on{background:var(--grad);border:0}
 body.modern #upd{background:var(--grad)}
 body.modern #upd button{color:#5b4cf5}
+
+/* ================= リキッドグラス(遊び) ================= */
+body.lg{--acc:#0a84ff;--acc-d:#0060df;--acc-l:rgba(10,132,255,.12);--ink:#0b0b0f;--sub:#5d5f6b;--line:rgba(0,0,0,.07);
+  --lgbg:rgba(255,255,255,.22);--lgbd:rgba(255,255,255,.6);
+  --lgsh:inset 0 1.5px 0 rgba(255,255,255,.95),inset 0 -1px 0 rgba(255,255,255,.35),inset 1px 0 0 rgba(255,255,255,.4),inset -1px 0 0 rgba(255,255,255,.4),inset 0 0 24px rgba(255,255,255,.18),0 10px 34px rgba(0,0,0,.14),0 1px 3px rgba(0,0,0,.08);
+  --lgblur:blur(14px) saturate(190%) brightness(1.06);
+  --sh1:var(--lgsh);--sh2:var(--lgsh);letter-spacing:.01em}
+/* ガラスの部品の共通:透けて、ふちが光る */
+body.lg button,body.lg .pitem,body.lg .sets,body.lg .empty,body.lg #wtop,body.lg #pop,body.lg .sheet,body.lg #toast,body.lg #hint,body.lg .elhead,body.lg .pdg,body.lg .refd,body.lg #elbtn{
+  background:var(--lgbg);-webkit-backdrop-filter:var(--lgblur);backdrop-filter:var(--lgblur);border:1px solid var(--lgbd);box-shadow:var(--lgsh)}
+body.lg button{border-radius:999px;position:relative;overflow:hidden}
+/* 上から光が当たったようなツヤ */
+body.lg button::after,body.lg #wtop::after,body.lg .pitem::after,body.lg #pop::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(160deg,rgba(255,255,255,.55) 0%,rgba(255,255,255,.08) 28%,rgba(255,255,255,0) 50%,rgba(255,255,255,.12) 85%,rgba(255,255,255,.3) 100%);mix-blend-mode:soft-light}
+body.lg button.pri{background:rgba(10,132,255,.78);color:#fff;border-color:rgba(255,255,255,.55);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.7),inset 0 -2px 6px rgba(0,40,120,.25),0 8px 24px rgba(10,132,255,.35)}
+body.lg button.ghost{background:transparent;border-color:transparent;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}
+body.lg button.ghost::after{display:none}
+body.lg button:active{transform:scale(.95)}
+body.lg input,body.lg select,body.lg textarea{background:rgba(255,255,255,.4);border:1px solid rgba(255,255,255,.7);border-radius:14px;box-shadow:inset 0 1px 2px rgba(0,0,0,.06)}
+body.lg .sw span{background:rgba(120,120,128,.25)}
+body.lg .sw input:checked+span{background:#34c759}
+/* ホーム:明るい壁紙(ガラス越しに色が見える) */
+body.lg #home{min-height:100vh;background:#eef3fb;background-image:radial-gradient(60vw 50vw at 0% 0%,#a7d3ff 0,transparent 60%),radial-gradient(55vw 45vw at 100% 10%,#ffc4e1 0,transparent 60%),radial-gradient(60vw 50vw at 30% 100%,#b5f1dc 0,transparent 60%),radial-gradient(40vw 40vw at 90% 90%,#ffe2a8 0,transparent 60%);background-attachment:fixed}
+body.lg .hero{background:transparent;color:var(--ink);padding-bottom:36px}
+body.lg .hero h1{font-size:46px;font-weight:800;letter-spacing:-.025em}
+body.lg .hero p{color:var(--sub);opacity:1}
+body.lg .logo{background:var(--lgbg);-webkit-backdrop-filter:var(--lgblur);backdrop-filter:var(--lgblur);border:1px solid var(--lgbd);box-shadow:var(--lgsh);border-radius:22px}
+body.lg .logo svg{stroke:var(--acc)}
+body.lg .wrap{margin-top:0}
+body.lg .pitem,body.lg .sets,body.lg .empty{border-radius:30px}
+body.lg .bar{background:rgba(255,255,255,.45);box-shadow:inset 0 1px 2px rgba(0,0,0,.08)}
+body.lg .bar i{background:linear-gradient(90deg,#5ac8fa,#0a84ff)}
+body.lg .tag{background:rgba(10,132,255,.12);color:#0060df}
+body.lg .sets label{border-top-color:rgba(255,255,255,.55)}
+/* 図面:浮いた透明なバー。選んだ道具は「レンズ」のように白く浮く */
+body.lg #work{background:#e9ebf0}
+body.lg #wtop{left:12px;right:12px;top:calc(10px + env(safe-area-inset-top));padding:8px 10px;border-radius:30px;background:rgba(255,255,255,.16)}
+body.lg #wtop>*{position:relative;z-index:1}
+body.lg #tabs{background:rgba(120,120,128,.12);border-radius:999px}
+body.lg #tabs button{border-radius:999px;background:transparent;border:0;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}
+body.lg #tabs button::after{display:none}
+body.lg #tabs button.on{background:rgba(255,255,255,.75);box-shadow:inset 0 1px 0 #fff,0 2px 10px rgba(0,0,0,.12)}
+body.lg #tools{padding:4px 2px 8px;margin-bottom:-6px}
+body.lg #tools button{background:transparent;border:0;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;border-radius:20px;color:#2b2d36}
+body.lg #tools button::after{display:none}
+body.lg #tools .main button.on{background:rgba(255,255,255,.7);color:var(--acc);box-shadow:inset 0 1.5px 0 #fff,inset 0 -1px 0 rgba(255,255,255,.5),0 4px 16px rgba(0,0,0,.14);transform:scale(1.04)}
+body.lg #tools .main button.on svg.i{stroke:var(--acc)}
+body.lg #tools .sep{background:rgba(0,0,0,.1)}
+body.lg #opts button.on .cdot{box-shadow:0 0 0 2px #fff,0 0 0 4px var(--acc)}
+body.lg #elbtn .cnt{background:#ff3b30}
+body.lg #elbtn .cnt.ok{background:var(--acc)}
+body.lg #toast{background:rgba(30,30,36,.42);color:#fff;border-radius:999px;padding:12px 22px;border-color:rgba(255,255,255,.35)}
+body.lg #hint{background:rgba(30,30,36,.42);color:#fff;border-color:rgba(255,255,255,.35);top:calc(136px + env(safe-area-inset-top))}
+body.lg #pop{border-radius:32px;background:rgba(255,255,255,.5)}
+body.lg #pop>*{position:relative;z-index:1}
+body.lg #pop .it{background:rgba(255,255,255,.45);border-radius:20px;box-shadow:inset 0 1px 0 rgba(255,255,255,.9)}
+body.lg .dlg{background:rgba(0,0,0,.18)}
+body.lg .sheet{background:rgba(255,255,255,.58);border-radius:34px 34px 0 0}
+@media (min-width:900px){body.lg .sheet{border-radius:34px}}
+body.lg #elpanel{background:#eef1f6;background-image:radial-gradient(50vw 40vw at 0% 0%,#d6e9ff 0,transparent 60%),radial-gradient(50vw 40vw at 100% 100%,#ffe0ee 0,transparent 60%)}
+body.lg .seg{background:rgba(120,120,128,.12);border-radius:999px}
+body.lg .seg button{background:transparent;border:0;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}
+body.lg .seg button::after{display:none}
+body.lg .seg button.on{background:rgba(255,255,255,.8);box-shadow:inset 0 1px 0 #fff,0 2px 8px rgba(0,0,0,.12)}
+body.lg .pdg,body.lg .refd{border-radius:24px}
+body.lg .refg button.on{background:rgba(10,132,255,.8);color:#fff}
+body.lg #upd{background:rgba(10,132,255,.85);-webkit-backdrop-filter:var(--lgblur);backdrop-filter:var(--lgblur)}
 </style>
 </head>
 <body>
@@ -504,7 +571,7 @@ body.modern #upd button{color:#5b4cf5}
       <label>写真IDの日付(空欄=今日)<input id="s_date" placeholder="MMDD" style="width:110px;text-align:center" inputmode="numeric"></label>
       <label>指でも線を描く(Apple Pencilがないとき)<span class="sw"><input type="checkbox" id="s_finger"><span></span></span></label>
       <label>ペン先の先読み(線が遅れて見えにくくなる)<span class="sw"><input type="checkbox" id="s_pred"><span></span></span></label>
-      <label>モダンな見た目(お遊び)<span class="sw"><input type="checkbox" id="s_modern"><span></span></span></label>
+      <label>見た目(お遊び)<select id="s_theme"><option value="">いつもの</option><option value="modern">モダン(暗め)</option><option value="lg">リキッドグラス</option></select></label>
       <label>手書きの字を覚えさせる(はじめに1回・1分くらい。読み取りがよく当たるようになります)<button id="s_hwtrain" class="pri" style="min-height:36px">覚えさせる</button></label>
       <label>(お試し)黒ペンで図面の旗揚げの横に書いた字も読み取る<span class="sw"><input type="checkbox" id="s_hw"><span></span></span></label>
       <label>旗揚げの横に手書きしたら、次の写真番号も自動で付ける(撮ってから書く人向け)<span class="sw"><input type="checkbox" id="s_hwph"><span></span></span></label>
@@ -3921,7 +3988,10 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   $('#s_next').oninput = function () { SET.next = Math.max(1, parseInt(this.value, 10) || 1); saveSet(); };
   $('#s_date').oninput = function () { SET.date = this.value.replace(/\D/g, '').slice(0, 4); saveSet(); };
   $('#s_finger').onchange = function () { SET.finger = this.checked; saveSet(); };
-  document.body.classList.toggle('modern', !!SET.modern); $('#s_modern').checked = !!SET.modern; $('#s_modern').onchange = function () { SET.modern = this.checked; saveSet(); document.body.classList.toggle('modern', SET.modern); };
+  // 見た目(お遊び):いつもの/モダン/リキッドグラス
+  if (SET.theme == null && SET.modern) SET.theme = 'modern';
+  function applyTheme() { var t = SET.theme || ''; document.body.classList.toggle('modern', t === 'modern'); document.body.classList.toggle('lg', t === 'lg'); var m = document.querySelector('meta[name=theme-color]'); if (m) m.content = t === 'modern' ? '#0c0a1d' : t === 'lg' ? '#eef3fb' : '#16467f'; }
+  applyTheme(); $('#s_theme').value = SET.theme || ''; $('#s_theme').onchange = function () { SET.theme = this.value; saveSet(); applyTheme(); };
   $('#s_pred').checked = !SET.noPredict; $('#s_pred').onchange = function () { SET.noPredict = !this.checked; saveSet(); };
   $('#s_hw').checked = !!SET.hwAuto;
   $('#s_hwtrain').onclick = function () { openTrain(); };
