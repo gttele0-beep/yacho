@@ -82,8 +82,7 @@ input:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0
 #stage{position:absolute;inset:0;overflow:hidden;touch-action:none}
 #cv,#cv2{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 #cv{transform-origin:0 0;will-change:transform;inset:auto}
-#cvbg{position:absolute;inset:0;overflow:hidden;pointer-events:none;background:#e9ece8}
-#cvbg canvas{will-change:transform}
+#cvbg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;background:#e9ece8}
 #cv3{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 #stage{background:#e9ece8}
 input,textarea,select,[contenteditable]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
@@ -512,6 +511,12 @@ body.lg .seg button.on{background:rgba(255,255,255,.8);box-shadow:inset 0 1px 0 
 body.lg .pdg,body.lg .refd{border-radius:24px}
 body.lg .refg button.on{background:rgba(10,132,255,.8);color:#fff}
 body.lg #upd{background:rgba(10,132,255,.85);-webkit-backdrop-filter:var(--lgblur);backdrop-filter:var(--lgblur)}
+
+/* 図面を動かしている間は、ガラスのぼかしを止める(重くならないように) */
+body.moving #wtop,body.moving #hint,body.moving #toast,body.moving .elhead,body.moving #elbtn{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+body.moving.modern #wtop{background:rgba(250,249,255,.95)}
+body.moving.lg #wtop{background:rgba(246,248,252,.95)}
+body.moving.lg button,body.moving.modern button{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
 </style>
 </head>
 <body>
@@ -4110,15 +4115,18 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   // ペン先の「先読み」を描く薄い層(毎回消して描き直す)
   var cv3 = document.createElement('canvas'); cv3.id = 'cv3'; cv2.parentNode.insertBefore(cv3, cv2.nextSibling); var ctx3 = cv3.getContext('2d');
   // いちばん下の層:図面全体のあらい絵(動かしている間に出てくる所は、まずこれが見える)
-  var bgHost = document.createElement('div'); bgHost.id = 'cvbg'; cv.parentNode.insertBefore(bgHost, cv); var bgCur = null;
+  // (大きい絵をそのまま拡大すると、iPadが描けなくなって図面が消えるので、画面と同じ大きさのキャンバスに毎回うつす)
+  var cvbg = document.createElement('canvas'); cvbg.id = 'cvbg'; cv.parentNode.insertBefore(cvbg, cv); var ctxbg = cvbg.getContext('2d'), bgDpr = 1;
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 3);
     CW = cv2.clientWidth; CH = cv2.clientHeight;
     MG = Math.round(Math.min(CW, CH) * 0.2);
     cv.style.left = cv.style.top = -MG + 'px'; cv.style.width = (CW + MG * 2) + 'px'; cv.style.height = (CH + MG * 2) + 'px';
     cv.width = Math.round((CW + MG * 2) * dpr); cv.height = Math.round((CH + MG * 2) * dpr);
-    cv2.width = cv3.width = Math.round(CW * dpr); cv2.height = cv3.height = Math.round(CH * dpr);
-    if (P) { P.hi = null; draw(); schedHi(); }
+    cv2.width = Math.round(CW * dpr); cv2.height = Math.round(CH * dpr);
+    cv3.width = CW; cv3.height = CH;   // 先読みの線は細い部分だけなので、あらくてよい(メモリを使わない)
+    bgDpr = 1; cvbg.width = Math.round(CW * bgDpr); cvbg.height = Math.round(CH * bgDpr);
+    if (P) { freeHi(); P.hi = null; draw(); schedHi(); }
   }
   window.addEventListener('resize', function () { setTimeout(resize, 50); });
 
@@ -4136,8 +4144,9 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   function baseTile(fi) {
     if (P.tiles[fi]) return P.tiles[fi];
     var keys = Object.keys(P.tiles);
-    if (keys.length >= 4) delete P.tiles[keys[0]];
-    var f = P.frames[fi], w = f.x1 - f.x0, h = f.y1 - f.y0, M = 3600;
+    // iPadはキャンバスの合計の大きさに上限がある(こえると図面が消える)ので、古い絵はすぐ捨てる
+    while (keys.length >= 1) { var old = P.tiles[keys[0]]; if (old && old.c && old.c !== (P.tiles[P.fi] || {}).c) { old.c.width = old.c.height = 0; } delete P.tiles[keys.shift()]; }
+    var f = P.frames[fi], w = f.x1 - f.x0, h = f.y1 - f.y0, M = 2800;
     var W = w >= h ? M : M * w / h, H = w >= h ? M * h / w : M;
     P.tiles[fi] = renderTile(f, W, H);
     return P.tiles[fi];
@@ -4151,11 +4160,11 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   }
   function showFrame(i) {
     hidePop();
-    P.fi = i; P.hi = null;
+    P.fi = i; freeHi(); P.hi = null;
     Array.prototype.forEach.call(document.querySelectorAll('#tabs button'), function (b, k) { b.classList.toggle('on', k === i); });
     fit(); draw(); schedHi();
   }
-  $('#fitbtn').onclick = function () { if (P) { fit(); P.hi = null; draw(); schedHi(); } };
+  $('#fitbtn').onclick = function () { if (P) { fit(); freeHi(); P.hi = null; draw(); schedHi(); } };
 
 
   // ================= GoodNotes 連携(損傷図をPDFで書き出す → GoodNotesで書く → PDFを読み込む) =================
@@ -4556,7 +4565,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       // 新しい図を表示
       var top = ($('#wtop').offsetHeight || 110) + 8, ah = Math.max(100, CH - top - 16), w = fr.x1 - fr.x0, hh = fr.y1 - fr.y0;
       V.s = Math.min(CW / (w * 1.08), ah / (hh * 1.08)); V.ax = (fr.x0 + fr.x1) / 2 - CW / 2 / V.s; V.ay = (fr.y0 + fr.y1) / 2 + dy + (top + ah / 2) / V.s;
-      P.hi = null; draw(); schedHi();
+      freeHi(); P.hi = null; draw(); schedHi();
       toast('「' + (base || '図') + suffix + '」を作りました。投げ縄で旗揚げ・損傷を囲んで、この図へドラッグで移せます', 6000);
     });
   }
@@ -4581,24 +4590,26 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   function drawTile(t) { var m = t.m; ctx.drawImage(t.c, sx(m.X0), sy(m.Y1), m.W / m.s * V.s, m.H / m.s * V.s); }
 
   var hiTimer = null;
+  function freeTiles() { if (!P) return; Object.keys(P.tiles || {}).forEach(function (k) { var t = P.tiles[k]; if (t && t.c) t.c.width = t.c.height = 0; }); P.tiles = {}; }
+  function freeHi() { if (P && P.hi && P.hi.c) { P.hi.c.width = P.hi.c.height = 0; } }
   function schedHi() {
     clearTimeout(hiTimer);
     hiTimer = setTimeout(function () {
       if (!P) return;
       if (INR || (G && /^(pan|pinch)$/.test(G.type)) || touches.size) { schedHi(); return; }
       var bt = baseTile(P.fi);
-      if (V.s * dpr <= bt.m.s * 1.15) { if (P.hi) { P.hi = null; draw(); } return; }
+      if (V.s * dpr <= bt.m.s * 1.15) { if (P.hi) { freeHi(); P.hi = null; draw(); } return; }
       var r = { x0: wx(0), x1: wx(CW), y0: wy(CH), y1: wy(0) };
       // 今の画面がまだ細かい絵の中に入っていれば描き直さない(少しずらしただけで止まらない)
       var h0 = P.hi;
       if (h0 && h0.cov && Math.abs(h0.vs - V.s) / V.s < 0.02 && r.x0 >= h0.cov.x0 && r.x1 <= h0.cov.x1 && r.y0 >= h0.cov.y0 && r.y1 <= h0.cov.y1) return;
       // 画面より少し広めに描いておく(大きすぎるとiPadが描けないので上限あり)
       var mg = 0.2, px = CW * dpr * (1 + mg * 2) * CH * dpr * (1 + mg * 2);
-      if (px > 14e6) mg = Math.max(0, (Math.sqrt(14e6 / (CW * dpr * CH * dpr)) - 1) / 2);
+      if (px > 6e6) mg = Math.max(0, (Math.sqrt(6e6 / (CW * dpr * CH * dpr)) - 1) / 2);
       var mw = (r.x1 - r.x0) * mg, mh = (r.y1 - r.y0) * mg;
       var r2 = { x0: r.x0 - mw, x1: r.x1 + mw, y0: r.y0 - mh, y1: r.y1 + mh };
       var t = renderTile(r2, CW * dpr * (1 + mg * 2), CH * dpr * (1 + mg * 2));
-      t.cov = r2; t.vs = V.s; P.hi = t;
+      t.cov = r2; t.vs = V.s; freeHi(); P.hi = t;
       draw();
     }, 320);
   }
@@ -4684,7 +4695,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   }
   // ペン先の先読み:ペンが次に行きそうな所まで、うすく線をのばしておく(遅れが見えにくくなる)
   var pdBox = null;
-  function clearPredict() { if (pdBox) { ctx3.setTransform(dpr, 0, 0, dpr, 0, 0); ctx3.clearRect(pdBox[0], pdBox[1], pdBox[2], pdBox[3]); pdBox = null; } }
+  function clearPredict() { if (pdBox) { ctx3.setTransform(1, 0, 0, 1, 0, 0); ctx3.clearRect(pdBox[0], pdBox[1], pdBox[2], pdBox[3]); pdBox = null; } }
   function predictTip(e) {
     clearPredict();
     if (SET.noPredict || !G || G.type !== 'draw' || G.straight || isHl(curC())) return;
@@ -4703,7 +4714,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     if (L < 1.5) return;
     if (L > 24) { dx *= 24 / L; dy *= 24 / L; }
     var w = curW() * (0.55 + 0.9 * (G.pr[G.pr.length - 1] || 0.5));
-    ctx3.setTransform(dpr, 0, 0, dpr, 0, 0); ctx3.strokeStyle = COL[curC()] || COL.k; ctx3.lineCap = 'round'; ctx3.lineWidth = w;
+    ctx3.setTransform(1, 0, 0, 1, 0, 0); ctx3.strokeStyle = COL[curC()] || COL.k; ctx3.lineCap = 'round'; ctx3.lineWidth = w;
     ctx3.beginPath(); ctx3.moveTo(tip.x, tip.y); ctx3.lineTo(tip.x + dx, tip.y + dy); ctx3.stroke();
     var m = w + 2; pdBox = [Math.min(tip.x, tip.x + dx) - m, Math.min(tip.y, tip.y + dy) - m, Math.abs(dx) + m * 2, Math.abs(dy) + m * 2];
   }
@@ -4722,16 +4733,17 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     if (!P) return;
     if (!XF) { draw(); return; }
     var k = V.s / XF.s, tx = (XF.ax - V.ax) * V.s + MG - MG * k, ty = (V.ay - XF.ay) * V.s + MG - MG * k;
-    cv.style.transform = 'translate3d(' + tx + 'px,' + ty + 'px,0) scale(' + k + ')';
+    if (!document.body.classList.contains('moving')) document.body.classList.add('moving');
     placeBg();
+    cv.style.transform = 'translate3d(' + tx + 'px,' + ty + 'px,0) scale(' + k + ')';
   }
   // 下の層(図面全体のあらい絵)を今の位置・大きさに合わせる
   function placeBg() {
     if (!P) return;
     var t = baseTile(P.fi), m = t.m;
-    if (bgCur !== t.c) { bgHost.innerHTML = ''; t.c.style.cssText = 'position:absolute;left:0;top:0;transform-origin:0 0;width:' + t.c.width + 'px;height:' + t.c.height + 'px'; bgHost.appendChild(t.c); bgCur = t.c; }
-    var k = V.s / m.s;
-    t.c.style.transform = 'translate3d(' + (m.X0 - V.ax) * V.s + 'px,' + (V.ay - m.Y1) * V.s + 'px,0) scale(' + k + ')';
+    ctxbg.setTransform(bgDpr, 0, 0, bgDpr, 0, 0);
+    ctxbg.fillStyle = '#e9ece8'; ctxbg.fillRect(0, 0, CW, CH);
+    ctxbg.drawImage(t.c, sx(m.X0), sy(m.Y1), m.W / m.s * V.s, m.H / m.s * V.s);
   }
   // 指で払ったら、すこし滑ってから止まる(慣性)
   var INR = null;
@@ -4825,7 +4837,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     drawSel();
     if (!G || !/^(pan|pinch|drag|dragAdd)$/.test(G.type)) progress();
     XF = { s: V.s, ax: V.ax, ay: V.ay }; if (cv.style.transform) cv.style.transform = '';
-    placeBg();
+    document.body.classList.remove('moving');
     // 旗揚げを置くときの印
     if (P.pick && P.pick.ax != null) {
       ctx.fillStyle = '#d22c2c'; ctx.beginPath(); ctx.arc(sx(P.pick.ax), sy(P.pick.ay), 6, 0, 7); ctx.fill();
@@ -4853,7 +4865,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     ovTimer = setTimeout(function () {
       if (!P) return;
       try { var fi = DREND.flagInfo(flagsForColor()); P.ov = DREND.damageColors(P.dxf, fi.flags, fi.layers); } catch (e) { P.ov = null; }
-      ovSig = sig; P.tiles = {}; P.hi = null; draw(); schedHi();
+      ovSig = sig; freeTiles(); freeHi(); P.hi = null; draw(); schedHi();
     }, now ? 0 : 500);
   }
 
@@ -4891,7 +4903,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
       if (m.dx || m.dy) DREND.shiftEnt(e, m.dx || 0, m.dy || 0, null);
       Object.keys(m.pv || {}).forEach(function (v) { DREND.shiftEnt(e, m.pv[v][0], m.pv[v][1], [+v]); });
     });
-    P.tiles = {}; P.hi = null; ovSig = null;
+    freeTiles(); freeHi(); P.hi = null; ovSig = null;
   }
   var lzT = null, lzPend = false;
   function lazyCommit() { lzPend = true; $('#undobtn').disabled = false; clearTimeout(lzT); lzT = setTimeout(flushLazy, 700); }
@@ -5922,7 +5934,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
         if (fi >= 0 && fi !== P.fi) showFrame(fi);
         V.s = Math.max(V.s, 3 / (f.h || P.hMed) * 4);
         V.ax = (f.box.x0 + f.box.x1) / 2 - CW / 2 / V.s; V.ay = (f.box.y0 + f.box.y1) / 2 + CH / 2 / V.s;
-        P.hi = null; draw(); schedHi(); showPop(f); return;
+        freeHi(); P.hi = null; draw(); schedHi(); showPop(f); return;
       }
       if (ed.non[v]) delete ed.non[v]; else ed.non[v] = 1;
       commit(); drawElList(); refreshSpanSel(); return;
