@@ -4836,6 +4836,8 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     if (!P) return;
     if (!XF) { draw(); return; }
     var k = V.s / XF.s, tx = (XF.ax - V.ax) * V.s + MG - MG * k, ty = (V.ay - XF.ay) * V.s + MG - MG * k;
+    // 大きく動かした・拡大縮小したときは、その場で描き直す(用意してある絵の外に出ると、図面が消えたように見えるため)
+    if (Math.abs(tx - MG + MG * k) > CW * 0.45 || Math.abs(ty - MG + MG * k) > CH * 0.45 || k < 0.6 || k > 1.7) { draw(); document.body.classList.add('moving'); return; }
     if (!document.body.classList.contains('moving')) document.body.classList.add('moving');
     placeBg();
     cv.style.transform = 'translate3d(' + tx + 'px,' + ty + 'px,0) scale(' + k + ')';
