@@ -3892,30 +3892,69 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   function nextPhotoId() { return photoDate() + (SET.who || 'X') + String(SET.next || 1).padStart(3, '0'); }
 
   // ---------------- 保存(IndexedDB) ----------------
+  // 図面・写真などの重いデータ(buf・files・caps・pack)は別の入れ物(heavy)に入れ、変わったときだけ書く。
+  //   書き込みのたびに図面と写真を丸ごと書き直していたので、書くほど・撮るほど保存が重くなっていた
+  var HEAVY = ['buf', 'bufPrev', 'files', 'caps', 'pack'];
+  var heavyRef = {};   // id → {buf, files, caps, pack, bufPrev} 前に書いたときの中身(同じものなら書かない)
+  function heavyChanged(r) {
+    var o = heavyRef[r.id]; if (!o) return true;
+    return HEAVY.some(function (k) { return o[k] !== r[k]; }) || o.capsLen !== (r.caps ? r.caps.length : 0);
+  }
+  function rememberHeavy(r) { var o = { capsLen: r.caps ? r.caps.length : 0 }; HEAVY.forEach(function (k) { o[k] = r[k]; }); heavyRef[r.id] = o; }
   var DB = {
     db: null,
     open: function () {
       return new Promise(function (res, rej) {
         if (DB.db) return res(DB.db);
-        var rq = indexedDB.open('yacho', 1);
-        rq.onupgradeneeded = function () { rq.result.createObjectStore('projects', { keyPath: 'id' }); };
+        var rq = indexedDB.open('yacho', 2);
+        rq.onupgradeneeded = function () {
+          var d = rq.result;
+          if (!d.objectStoreNames.contains('projects')) d.createObjectStore('projects', { keyPath: 'id' });
+          if (!d.objectStoreNames.contains('heavy')) d.createObjectStore('heavy', { keyPath: 'id' });
+        };
         rq.onsuccess = function () { DB.db = rq.result; res(DB.db); };
         rq.onerror = function () { rej(rq.error); };
       });
     },
-    tx: function (mode, fn) {
+    all: function () {
       return DB.open().then(function (db) {
         return new Promise(function (res, rej) {
-          var t = db.transaction('projects', mode), st = t.objectStore('projects');
-          var out = fn(st);
-          t.oncomplete = function () { res(out && out.result !== undefined ? out.result : out); };
+          var t = db.transaction(['projects', 'heavy'], 'readonly'), a = t.objectStore('projects').getAll(), h = t.objectStore('heavy').getAll();
+          t.oncomplete = function () {
+            var H = {}; (h.result || []).forEach(function (x) { H[x.id] = x; });
+            res((a.result || []).map(function (r) {
+              var x = H[r.id];
+              if (x) HEAVY.forEach(function (k) { if (r[k] == null && x[k] != null) r[k] = x[k]; });
+              if (x || r.buf != null) { if (x) rememberHeavy(r); }   // 古い形(全部1つ)のものは、次に保存するときに分ける
+              return r;
+            }));
+          };
           t.onerror = function () { rej(t.error); };
         });
       });
     },
-    all: function () { return DB.tx('readonly', function (s) { return s.getAll(); }); },
-    put: function (r) { return DB.tx('readwrite', function (s) { s.put(r); }); },
-    del: function (id) { return DB.tx('readwrite', function (s) { s.delete(id); }); }
+    put: function (r) {
+      return DB.open().then(function (db) {
+        return new Promise(function (res, rej) {
+          var hv = heavyChanged(r);
+          var t = db.transaction(['projects', 'heavy'], 'readwrite');
+          var light = {}; Object.keys(r).forEach(function (k) { if (HEAVY.indexOf(k) < 0) light[k] = r[k]; });
+          light.split = 1;
+          t.objectStore('projects').put(light);
+          if (hv) { var x = { id: r.id }; HEAVY.forEach(function (k) { if (r[k] != null) x[k] = r[k]; }); t.objectStore('heavy').put(x); }
+          t.oncomplete = function () { if (hv) rememberHeavy(r); res(); };
+          t.onerror = function () { rej(t.error); };
+        });
+      });
+    },
+    del: function (id) {
+      return DB.open().then(function (db) {
+        return new Promise(function (res, rej) {
+          var t = db.transaction(['projects', 'heavy'], 'readwrite'); t.objectStore('projects').delete(id); t.objectStore('heavy').delete(id);
+          t.oncomplete = function () { delete heavyRef[id]; res(); }; t.onerror = function () { rej(t.error); };
+        });
+      });
+    }
   };
   var memStore = null;   // IndexedDB が使えないとき(プライベートブラウズなど)
   function dbAll() { return memStore ? Promise.resolve(Object.values(memStore)) : DB.all().catch(function () { memStore = {}; toast('この画面ではiPadの中に保存できません。書き出しを忘れずに'); return []; }); }
@@ -4893,7 +4932,9 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     });
     // 手書きの線
     drawStampsAndLegends();
-    ed.strokes.forEach(function (s) { drawStroke(ctx, s.pts, s.p, s.c, s.w); });
+    // 画面の外の線は描かない(線が増えても重くならないように)
+    var vX0 = wx(-MG), vX1 = wx(CW + MG), vY0 = wy(CH + MG), vY1 = wy(-MG);
+    ed.strokes.forEach(function (s) { var b = strokeBB(s); if (b && (b[2] < vX0 || b[0] > vX1 || b[3] < vY0 || b[1] > vY1)) return; drawStroke(ctx, s.pts, s.p, s.c, s.w); });
     (ed.notes || []).forEach(function (n) {
       if (!inFrame(n.x, n.y)) return;
       var ls = String(n.t).split('\n').map(function (t) { return { t: t, c: 'k' }; });
@@ -4978,6 +5019,14 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     freeTiles(); freeHi(); P.hi = null; ovSig = null;
   }
   var lzT = null, lzPend = false;
+  var SBB = new WeakMap();
+  function strokeBB(s) {
+    var b = SBB.get(s); if (b) return b;
+    var p = s.pts; if (!p || p.length < 2) return null;
+    var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (var i = 0; i + 1 < p.length; i += 2) { if (p[i] < x0) x0 = p[i]; if (p[i] > x1) x1 = p[i]; if (p[i + 1] < y0) y0 = p[i + 1]; if (p[i + 1] > y1) y1 = p[i + 1]; }
+    var m = (s.w || 1) * 2; b = [x0 - m, y0 - m, x1 + m, y1 + m]; SBB.set(s, b); return b;
+  }
   function lazyCommit() { lzPend = true; $('#undobtn').disabled = false; clearTimeout(lzT); lzT = setTimeout(flushLazy, 700); }
   function flushLazy() { if (!lzPend) return; clearTimeout(lzT); lzPend = false; if (P) commit(true); }
   function commit(quiet) {
@@ -4985,7 +5034,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     var j = JSON.stringify(P.rec.edits);
     if (j === hist[hpos]) return;
     hist = hist.slice(0, hpos + 1); hist.push(j);
-    if (hist.length > 80) hist.shift();
+    if (hist.length > 40) hist.shift();   // 戻せる回数(多すぎるとメモリを使って重くなる)
     hpos = hist.length - 1;
     applyOmoves(); updUndo();
     if (!quiet) { draw(); updateColors(); } else progress();
@@ -6794,7 +6843,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   function moveItems(dx, dy) {
     SEL.items.forEach(function (it) {
       var o = it.o;
-      if (it.k === 'stroke') for (var i = 0; i + 1 < o.pts.length; i += 2) { o.pts[i] += dx; o.pts[i + 1] += dy; }
+      if (it.k === 'stroke') { for (var i = 0; i + 1 < o.pts.length; i += 2) { o.pts[i] += dx; o.pts[i + 1] += dy; } SBB.delete(o); }
       else if (it.k === 'stamp') { o.x0 += dx; o.x1 += dx; o.y0 += dy; o.y1 += dy; if (o.poly) for (var pi2 = 0; pi2 + 1 < o.poly.length; pi2 += 2) { o.poly[pi2] += dx; o.poly[pi2 + 1] += dy; } }
       else if (it.k === 'note' || it.k === 'legend') { o.x += dx; o.y += dy; }
       else if (it.k === 'add') { o.x += dx; o.y += dy; if (it.withPt) { o.ax += dx; o.ay += dy; } }
