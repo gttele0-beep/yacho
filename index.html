@@ -82,7 +82,8 @@ input:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0
 #stage{position:absolute;inset:0;overflow:hidden;touch-action:none}
 #cv,#cv2{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 #cv{transform-origin:0 0;will-change:transform;inset:auto}
-#cvbg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;background:#e9ece8}
+#cvbg{position:absolute;pointer-events:none;background:#e9ece8;transform-origin:0 0;will-change:transform}
+#stage{overflow:hidden}
 #cv3{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 #stage{background:#e9ece8}
 input,textarea,select,[contenteditable]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
@@ -4116,7 +4117,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   var cv3 = document.createElement('canvas'); cv3.id = 'cv3'; cv2.parentNode.insertBefore(cv3, cv2.nextSibling); var ctx3 = cv3.getContext('2d');
   // いちばん下の層:図面全体のあらい絵(動かしている間に出てくる所は、まずこれが見える)
   // (大きい絵をそのまま拡大すると、iPadが描けなくなって図面が消えるので、画面と同じ大きさのキャンバスに毎回うつす)
-  var cvbg = document.createElement('canvas'); cvbg.id = 'cvbg'; cv.parentNode.insertBefore(cvbg, cv); var ctxbg = cvbg.getContext('2d'), bgDpr = 1;
+  var cvbg = document.createElement('canvas'); cvbg.id = 'cvbg'; cv.parentNode.insertBefore(cvbg, cv); var ctxbg = cvbg.getContext('2d'), bgReady = false, BGS = 0.6;
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 3);
     CW = cv2.clientWidth; CH = cv2.clientHeight;
@@ -4125,7 +4126,8 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     cv.width = Math.round((CW + MG * 2) * dpr); cv.height = Math.round((CH + MG * 2) * dpr);
     cv2.width = Math.round(CW * dpr); cv2.height = Math.round(CH * dpr);
     cv3.width = CW; cv3.height = CH;   // 先読みの線は細い部分だけなので、あらくてよい(メモリを使わない)
-    bgDpr = 1; cvbg.width = Math.round(CW * bgDpr); cvbg.height = Math.round(CH * bgDpr);
+    // 画面の縦横3倍の範囲(まわり1画面ずつ)を、あらく1回だけ描いておき、動かしている間はそれを動かすだけ(毎回描かない=軽い)
+    cvbg.width = Math.round(CW * 3 * BGS); cvbg.height = Math.round(CH * 3 * BGS); cvbg.style.left = -CW + 'px'; cvbg.style.top = -CH + 'px'; cvbg.style.width = CW * 3 + 'px'; cvbg.style.height = CH * 3 + 'px'; bgReady = false;
     if (P) { freeHi(); P.hi = null; draw(); schedHi(); }
   }
   window.addEventListener('resize', function () { setTimeout(resize, 50); });
@@ -4739,11 +4741,19 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
   }
   // 下の層(図面全体のあらい絵)を今の位置・大きさに合わせる
   function placeBg() {
-    if (!P) return;
-    var t = baseTile(P.fi), m = t.m;
-    ctxbg.setTransform(bgDpr, 0, 0, bgDpr, 0, 0);
-    ctxbg.fillStyle = '#e9ece8'; ctxbg.fillRect(0, 0, CW, CH);
-    ctxbg.drawImage(t.c, sx(m.X0), sy(m.Y1), m.W / m.s * V.s, m.H / m.s * V.s);
+    if (!P || !XF) return;
+    var mx = CW, my = CH;
+    if (!bgReady) {
+      // XFの位置(描き直したときの位置)で、まわり半分ずつ広く描く
+      var t = baseTile(P.fi), m = t.m;
+      ctxbg.setTransform(BGS, 0, 0, BGS, 0, 0);
+      ctxbg.fillStyle = '#e9ece8'; ctxbg.fillRect(0, 0, CW * 3, CH * 3);
+      var x0 = (m.X0 - XF.ax) * XF.s + mx, y0 = (XF.ay - m.Y1) * XF.s + my;
+      ctxbg.drawImage(t.c, x0, y0, m.W / m.s * XF.s, m.H / m.s * XF.s);
+      bgReady = true;
+    }
+    var k = V.s / XF.s, tx = (XF.ax - V.ax) * V.s + mx - mx * k, ty = (V.ay - XF.ay) * V.s + my - my * k;
+    cvbg.style.transform = 'translate3d(' + tx + 'px,' + ty + 'px,0) scale(' + k + ')';
   }
   // 指で払ったら、すこし滑ってから止まる(慣性)
   var INR = null;
@@ -4836,7 +4846,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     });
     drawSel();
     if (!G || !/^(pan|pinch|drag|dragAdd)$/.test(G.type)) progress();
-    XF = { s: V.s, ax: V.ax, ay: V.ay }; if (cv.style.transform) cv.style.transform = '';
+    XF = { s: V.s, ax: V.ax, ay: V.ay }; if (cv.style.transform) cv.style.transform = ''; bgReady = false; if (cvbg.style.transform) cvbg.style.transform = '';
     document.body.classList.remove('moving');
     // 旗揚げを置くときの印
     if (P.pick && P.pick.ax != null) {
