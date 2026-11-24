@@ -2303,14 +2303,17 @@ const DREND = (function () {
                 const x = col3 === 0 ? 0 : col3 === 1 ? -widths[k] / 2 : -widths[k];
                 let cx = x;
                 const y = top + h + pitch * k;
-                ln.forEach((r) => { ctx.fillStyle = ov || P3(r.color); ctx.fillText(r.ch, cx, y); cx += ctx.measureText(r.ch).width; });
+                if (ov || ln.every((r) => r.color === ln[0].color)) { ctx.fillStyle = ov || P3(ln.length ? ln[0].color : col); ctx.fillText(ln.map((r) => r.ch).join(''), cx, y); }   // 1色の行はまとめて描く(速い)
+                else ln.forEach((r) => { ctx.fillStyle = P3(r.color); ctx.fillText(r.ch, cx, y); cx += ctx.measureText(r.ch).width; });
               });
             } else {
               const ha = e.ha || 0, va = e.va || 0;
               hx = ha === 1 || ha === 4 ? -widths[0] / 2 : ha === 2 ? -widths[0] : 0;
               const y = va === 3 ? h : va === 2 ? h / 2 : 0;
               let cx = hx;
-              lines[0].forEach((r) => { ctx.fillStyle = ov || P3(r.color); ctx.fillText(r.ch, cx, y); cx += ctx.measureText(r.ch).width; });
+              const l0 = lines[0];
+              if (ov || l0.every((r) => r.color === l0[0].color)) { ctx.fillStyle = ov || P3(l0.length ? l0[0].color : col); ctx.fillText(l0.map((r) => r.ch).join(''), cx, y); }
+              else l0.forEach((r) => { ctx.fillStyle = P3(r.color); ctx.fillText(r.ch, cx, y); cx += ctx.measureText(r.ch).width; });
             }
             ctx.restore();
             break;
@@ -2332,7 +2335,56 @@ const DREND = (function () {
         }
       }
     };
-    draw(dxf.ents, [1, 0, 0, 0, 1, 0], null, 0);
+    // 見えている範囲の外の図形は描かない(拡大したときに図面全体を描き直さないように。iPadで重くならないように)
+    // 実際に絵に入る範囲(縦横比が違うと、region より広く見える)
+    const vx0 = rx0 - ox / s, vx1 = vx0 + W / s, vy1 = ry0 + rh + oy / s, vy0 = vy1 - H / s;
+    const mw = (vx1 - vx0) * 0.03, mh = (vy1 - vy0) * 0.03;
+    const cx0 = vx0 - mw, cx1 = vx1 + mw, cy0 = vy0 - mh, cy1 = vy1 + mh;
+    const whole = ((vx1 - vx0) * (vy1 - vy0)) >= 0.6 * (dxf.__extA || (dxf.__extA = (() => { const x = extents(dxf); return x ? (x.x1 - x.x0) * (x.y1 - x.y0) : Infinity; })()));
+    const list0 = whole ? dxf.ents : dxf.ents.filter((e) => { const b = bbOf(dxf, e); return !b || !(b[2] < cx0 || b[0] > cx1 || b[3] < cy0 || b[1] > cy1); });
+    draw(list0, [1, 0, 0, 0, 1, 0], null, 0);
+  }
+  // 図形の範囲 [x0,y0,x1,y1](分からないときは null = いつも描く)。一度計算したら覚えておく
+  const BB = new WeakMap();
+  function bbPts(pts) { let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (const p of pts) { if (!isFinite(p[0]) || !isFinite(p[1])) continue; if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0]; if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1]; } return x0 <= x1 ? [x0, y0, x1, y1] : null; }
+  function blockBB(dxf, name, depth) {
+    const b = dxf.blocks && dxf.blocks[name]; if (!b) return null;
+    if (b.__bb !== undefined) return b.__bb;
+    if (depth > 6) return null;
+    b.__bb = null;   // 自分を挿入しているときの無限ループよけ
+    let acc = null;
+    for (const e of b.ents) { const q = bbOf(dxf, e, depth + 1); if (!q) { acc = null; b.__bb = null; return null; } acc = acc ? [Math.min(acc[0], q[0]), Math.min(acc[1], q[1]), Math.max(acc[2], q[2]), Math.max(acc[3], q[3])] : q; }
+    b.__bb = acc; return acc;
+  }
+  function bbOf(dxf, e, depth) {
+    if (BB.has(e)) return BB.get(e);
+    let r = null;
+    try {
+      switch (e.type) {
+        case 'LINE': if (e.x2 != null) r = bbPts([[e.x, e.y], [e.x2, e.y2]]); break;
+        case 'LWPOLYLINE': case 'POLYLINE': case 'LEADER': case 'SPLINE': if (e.pts && e.pts.length) r = bbPts(e.pts); break;
+        case 'CIRCLE': case 'ARC': if (e.h != null) r = [e.x - e.h, e.y - e.h, e.x + e.h, e.y + e.h]; break;
+        case 'ELLIPSE': if (e.x2 != null) { const R = Math.hypot(e.x2, e.y2); r = [e.x - R, e.y - R, e.x + R, e.y + R]; } break;
+        case 'HATCH': { const L = hatchLoops(e); if (L.length) r = bbPts([].concat(...L)); break; }
+        case 'TEXT': case 'MTEXT': case 'ATTRIB': {
+          if (e.x == null) break;
+          const t = String((e.t3 || '') + (e.t || '')), lines = t.split(/\\P|\n/), h = e.h || 2.5;
+          const L = Math.max(1, ...lines.map((x) => x.replace(/\\[A-Za-z][^;]*;|[{}]/g, '').length));
+          const R = Math.max(L * h * 1.4, lines.length * h * 1.8) + h * 2;
+          const x = e.x2 != null && e.type !== 'MTEXT' ? Math.min(e.x, e.x2) : e.x, y = e.y;
+          r = [x - R, y - R, x + R + (e.x2 != null && e.type !== 'MTEXT' ? Math.abs(e.x2 - e.x) : 0), y + R]; break;
+        }
+        case 'INSERT': {
+          const q = blockBB(dxf, e.name, depth || 0); if (!q) break;
+          const b = dxf.blocks[e.name], sx = e.sx || 1, sy = e.sy || e.sx || 1, a = (e.a0 || 0) * Math.PI / 180, c = Math.cos(a), sn = Math.sin(a);
+          const tf = (px, py) => { const lx = (px - b.bx) * sx, ly = (py - b.by) * sy; return [(e.x || 0) + c * lx - sn * ly, (e.y || 0) + sn * lx + c * ly]; };
+          r = bbPts([tf(q[0], q[1]), tf(q[2], q[1]), tf(q[0], q[3]), tf(q[2], q[3])]); break;
+        }
+        case 'DIMENSION': r = blockBB(dxf, e.name, depth || 0); break;
+        default: r = null;
+      }
+    } catch (err) { r = null; }
+    BB.set(e, r); return r;
   }
 
 
@@ -5314,7 +5366,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     cur.lines.forEach(function (l, i) { var g = gradeOf(l); if (g) items.push({ i: i, l: l, g: g }); });
     var h = '<div class="ph">' + (cur.ok ? '<span style="color:var(--acc);display:flex">' + SVG('check') + '</span>' : '') + esc(cur.lines[0] ? cur.lines[0].t : '') + '<button class="x" data-p="close">✕</button></div>';
     var pps = prevPhotosOf(f);
-    if (pps.length) h += '<div class="pslbl">' + SVG('img') + '前回の写真 ' + pps.length + '枚(タップで大きく)</div><div class="pstrip">' + pps.map(function (p, k) { return '<button data-pp="' + k + '" style="background-image:url(' + fileUrl(p.file) + ')"><span>' + esc((p.dmg || '') + (p.grade ? '-' + p.grade : '')) + '</span></button>'; }).join('') + '</div>';
+    if (pps.length) h += '<div class="pslbl">' + SVG('img') + '前回の写真 ' + pps.length + '枚(タップで大きく)</div><div class="pstrip">' + pps.map(function (p, k) { return '<button data-pp="' + k + '" ' + thumbAttr(p.file) + '><span>' + esc((p.dmg || '') + (p.grade ? '-' + p.grade : '')) + '</span></button>'; }).join('') + '</div>';
     popPP = pps;
     // 1. 写真番号
     h += '<div class="photorow"><button class="pri" data-p="photo">' + SVG('cam') + '撮った ' + esc(nextPhotoId()) + '</button>' + (SET.who2 ? '<button data-p="who" class="ghost" style="min-height:34px;padding:2px 10px;font-size:12px" title="撮影者を切り替える">' + esc(SET.who || 'X') + '⇄' + esc(SET.who2) + '</button>' : '') +
@@ -5660,6 +5712,39 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     if (!urlCache[k]) urlCache[k] = URL.createObjectURL(P.rec.files[path]);
     return urlCache[k];
   }
+  // 一覧に並べる写真は、小さい絵(長い辺400px)を1枚ずつ作って使う。
+  //   前回の写真をそのまま何十枚も並べると、iPadが大きな写真を一度に読み込んで重くなる(固まる)ため
+  var thumbCache = {}, thumbQ = [], thumbBusy = false;
+  function thumbAttr(path) {
+    var k = P ? P.rec.id + '|' + path : path;
+    return thumbCache[k] ? 'style="background-image:url(' + thumbCache[k] + ')"' : 'data-thumb="' + esc(path) + '"';
+  }
+  function makeThumb(path) {
+    var k = P.rec.id + '|' + path, f = P.rec.files && P.rec.files[path];
+    if (thumbCache[k]) return Promise.resolve(thumbCache[k]);
+    if (!f) return Promise.reject(new Error('no file'));
+    var c = document.createElement('canvas');
+    return createImageBitmap(f).then(function (bmp) {
+      var sc = Math.min(1, 400 / Math.max(bmp.width, bmp.height));
+      c.width = Math.max(1, Math.round(bmp.width * sc)); c.height = Math.max(1, Math.round(bmp.height * sc));
+      c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height); if (bmp.close) bmp.close();
+      return new Promise(function (res) { c.toBlob(res, 'image/jpeg', 0.8); });
+    }).then(function (b) { c.width = c.height = 0; if (!b) throw new Error('toBlob'); return (thumbCache[k] = URL.createObjectURL(b)); });
+  }
+  function pumpThumbs() {
+    if (thumbBusy || !P) return;
+    var el = thumbQ.shift(); if (!el) return;
+    var path = el.getAttribute('data-thumb');
+    if (!path || !el.isConnected) { pumpThumbs(); return; }
+    thumbBusy = true;
+    var put = function (u) { document.querySelectorAll('[data-thumb]').forEach(function (x) { if (x.getAttribute('data-thumb') === path) { x.style.backgroundImage = 'url(' + u + ')'; x.removeAttribute('data-thumb'); } }); };
+    makeThumb(path).then(put, function () { put(fileUrl(path)); }).then(function () { thumbBusy = false; setTimeout(pumpThumbs, 0); });
+  }
+  if (window.MutationObserver) new MutationObserver(function (ms) {
+    var any = false;
+    ms.forEach(function (m) { m.addedNodes.forEach(function (n) { if (n.nodeType !== 1) return; if (n.hasAttribute('data-thumb')) { thumbQ.push(n); any = true; } n.querySelectorAll && n.querySelectorAll('[data-thumb]').forEach(function (x) { thumbQ.push(x); any = true; }); }); });
+    if (any) pumpThumbs();
+  }).observe(document.body, { childList: true, subtree: true });
   // 旗揚げの径間(調書作成システムで決めた径間ブロック → 径間)
   function spanOfFlag(f) {
     var sp = (P.rec.pack && P.rec.pack.spans) || [];
@@ -6064,7 +6149,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     $('#elsum').textContent = pps.length ? '前回の写真 ' + pps.length + '枚' : '';
     var h = '<div class="ppv">' + prevDiagHtml(hd) + '<div class="hd">' + esc(hd) + '</div>';
     if (!pps.length) h += '<div class="small">この旗揚げには前回の写真がありません(調書作成システムで前回の写真を入れて「野帳アプリ用に書き出す」をすると出ます)。</div>';
-    pps.forEach(function (p, k) { h += '<button class="ph" data-ppv="' + k + '" style="background-image:url(' + fileUrl(p.file) + ')"></button><div class="cap"><b>' + esc((p.dmg || '') + (p.grade ? '-' + p.grade : '')) + '</b>' + (p.no ? ' 前回の写真' + esc(p.no) : '') + (p.memo ? '<div class="memo">' + esc(p.memo) + '</div>' : '') + '</div>'; });
+    pps.forEach(function (p, k) { h += '<button class="ph" data-ppv="' + k + '" ' + thumbAttr(p.file) + '></button><div class="cap"><b>' + esc((p.dmg || '') + (p.grade ? '-' + p.grade : '')) + '</b>' + (p.no ? ' 前回の写真' + esc(p.no) : '') + (p.memo ? '<div class="memo">' + esc(p.memo) + '</div>' : '') + '</div>'; });
     box.innerHTML = h + '</div>';
     EL.ppList = pps;
   }
@@ -6095,7 +6180,7 @@ const CADGEN_TPL = "ICAwClNFQ1RJT04KICAyCkhFQURFUgogIDkKJEFDQURWRVIKICAxCkFDMTAz
     gl.forEach(function (g) {
       var ids = ed[g.uid] || [];
       h += '<div class="gi' + (ids.length ? ' done' : '') + '">' +
-        (g.prev ? '<button class="th" data-gprev="' + esc(g.uid) + '" style="background-image:url(' + fileUrl(g.prev) + ')"></button>' : '<div class="th">前回の写真なし</div>') +
+        (g.prev ? '<button class="th" data-gprev="' + esc(g.uid) + '" ' + thumbAttr(g.prev) + '></button>' : '<div class="th">前回の写真なし</div>') +
         '<div class="bd"><div class="no">' + (multiSpan() ? '径間' + esc(g.span) + ' ・ ' : '') + (g.tag ? esc(g.tag) : '') + '</div><div class="memo">' + esc(g.memo) + '</div>' +
         (ids.length ? '<div class="chips" style="margin-top:6px">' + ids.map(function (x, k) { return '<span class="chip">' + esc(x) + '<button data-grm="' + esc(g.uid) + '|' + k + '">✕</button></span>'; }).join('') + '</div>' : '') +
         '<div class="acts"><button class="pri" data-gid="' + esc(g.uid) + '">' + SVG('cam') + '撮った ' + esc(nextPhotoId()) + '</button>' + '<button data-gcam="' + esc(g.uid) + '">' + SVG('img') + 'iPadで重ねて撮る</button></div></div></div>';
